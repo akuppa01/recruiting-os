@@ -6,3 +6,4 @@ export * from "./score/index.js";
 export { runNormalizeStage, runScoreStage } from "./stages/index.js";
 export * from "./connectors/index.js";
 export * from "./contacts/index.js";
+export * from "./resume/index.js";

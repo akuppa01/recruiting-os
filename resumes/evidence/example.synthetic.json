@@ -1,0 +1,4 @@
+{ "_synthetic": true, "_note": "FAKE data for format illustration and tests only. Never used for real resumes.",
+  "items": [{ "id": "example-1", "employer": "Example Corp", "role": "Example Engineer", "dates": "Jan 2020 – Dec 2021",
+    "statement": "Example bullet describing a made-up accomplishment affecting 3 teams.", "metrics": ["3 teams"], "tags": ["example"],
+    "verifiedBy": "user_confirmed", "sourceDoc": "synthetic" }] }
