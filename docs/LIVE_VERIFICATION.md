@@ -20,10 +20,10 @@ Updated in-place after each check. Status values: **untested** / **pass** / **fa
 
 | # | Check | Status | Date | Evidence |
 |---|-------|--------|------|----------|
-| A.1 | List tables, RLS, buckets, extensions, functions — confirm migration state | **untested** | – | Needs Supabase MCP authenticated |
-| A.2 | 20 tables exist, RLS on all, `bootstrap_tenant()` exists, buckets `resumes`+`ingest-files` private, storage policies exist | **untested** | – | Depends on A.1 |
-| A.3 | Security/performance advisors run; real issues fixed | **untested** | – | – |
-| A.4 | Cross-tenant RLS test script against real Supabase; test users created, isolation proved, users deleted | **untested** | – | Script: `scripts/test-rls-live.mjs` |
+| A.1 | List tables, RLS, buckets, extensions, functions — confirm migration state | **pass** | 2026-11-06 | CLI `supabase db push` applied 0001+0002+0003; 20 tables confirmed with RLS, 2 private buckets, `bootstrap_tenant()` + `is_tenant_member()` exist, 5 extensions installed |
+| A.2 | 20 tables exist, RLS on all, `bootstrap_tenant()` exists, buckets `resumes`+`ingest-files` private, storage policies exist | **pass** | 2026-11-06 | Verified via `supabase db query --linked` on `pg_tables` (rowsecurity=t for all 20), `storage.buckets` (public=false), `pg_proc` |
+| A.3 | Security/performance advisors run; real issues fixed | **pass** | 2026-11-06 | Migration `0003_perf_indexes.sql` applied: 14 missing FK/join indexes created on api_tokens, applications, resume_versions, cover_letters, exceptions, dead_letters, external_actions, outreach_messages, jobs, tenants. `set_updated_at()` search_path pinned. All 14 indexes confirmed on live DB. SECURITY DEFINER functions already have `search_path=public`. |
+| A.4 | Cross-tenant RLS test script against real Supabase; test users created, isolation proved, users deleted | **pass** | 2026-11-06 | `node scripts/test-rls-live.mjs` — 7/7 checks pass: bootstrap, insert, A reads own, B reads null, B update blocked (0 rows), B delete blocked, anon reads 0. Users+tenants+rows cleaned up. |
 | A.5 | Google Auth provider configured; sign-in flow verified end to end | **user-action-needed** | – | User must configure in Supabase dashboard + Google Cloud console; exact steps provided below |
 
 ---
