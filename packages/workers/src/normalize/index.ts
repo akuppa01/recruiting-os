@@ -44,7 +44,7 @@ export interface TextExtract { title: string | null; company: string | null; loc
 /** Heuristic header extraction from a pasted JD. Supports "Title at Company", "Company - Title", and labelled lines. */
 export function extractFromText(text: string): TextExtract {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const labelled = (k: string) => lines.map((l) => l.match(new RegExp(`^${k}\\s*[:\\-]\\s*(.+)$`, "i"))?.[1]).find(Boolean) ?? null;
+  const labelled = (k: string) => lines.map((l) => l.match(new RegExp(`^(?:${k})\\s*[:\\-]\\s*(.+)$`, "i"))?.[1]).find(Boolean) ?? null;
   let title = labelled("(?:job )?title|role|position");
   let company = labelled("company|employer|organization");
   let location = labelled("location|office");
