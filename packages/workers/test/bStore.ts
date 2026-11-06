@@ -16,11 +16,11 @@ export function makeFakeStore() {
     async getIngestion(_c, id) { return ings.get(id) ?? null; },
     async updateIngestion(_c, id, patch) { Object.assign(ings.get(id)!, patch); },
     async upsertJob(ctx, ingestionId, normalized) {
-      const dup = [...jobs.values()].find((j) => j.normalized.dedupeKey === normalized.dedupeKey && j.ctx.tenantId === ctx.tenantId);
-      if (dup) return { job: dup, duplicate: true };
+      // mirrors @ros/db InMemoryStore: a duplicate yields a NEW row with stage "duplicate" + duplicateOf
+      const orig = [...jobs.values()].find((j) => j.stage !== "duplicate" && j.normalized.dedupeKey === normalized.dedupeKey && j.ctx.tenantId === ctx.tenantId);
       const now = new Date().toISOString();
-      const job: JobRow = { id: randomUUID(), ctx, stage: "ingested", normalized, score: null, ingestionId, duplicateOf: null, createdAt: now, updatedAt: now };
-      jobs.set(job.id, job); return { job, duplicate: false };
+      const job: JobRow = { id: randomUUID(), ctx, stage: orig ? "duplicate" : "ingested", normalized, score: null, ingestionId, duplicateOf: orig?.id ?? null, createdAt: now, updatedAt: now };
+      jobs.set(job.id, job); return { job, duplicate: !!orig };
     },
     async setJobStage(_c, id, stage, score) { const j = jobs.get(id)!; j.stage = stage; if (score) j.score = score; },
     async getJob(_c, id) { return jobs.get(id) ?? null; },

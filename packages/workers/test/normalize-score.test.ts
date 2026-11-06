@@ -100,8 +100,11 @@ describe("stages", () => {
     expect(f.jobs.get(jobId)!.stage).toBe("qualified");
     const i2 = await f.store.createIngestion(ctx, req);
     await runNormalizeStage(f.store, ctx, i2.id);
-    expect(f.ings.get(i2.id)!.jobId).toBe(jobId);
+    const dupRow = f.jobs.get(f.ings.get(i2.id)!.jobId!)!;
+    expect(dupRow.stage).toBe("duplicate"); expect(dupRow.duplicateOf).toBe(jobId);
+    await runScoreStage(f.store, ctx, dupRow.id); // duplicates are skipped, not scored
+    expect(dupRow.stage).toBe("duplicate"); expect(dupRow.score).toBeNull();
     expect(f.events.map((e) => e.kind)).toEqual(expect.arrayContaining(["job.normalized", "job.scored", "job.duplicate"]));
-    expect(f.jobs.size).toBe(1);
+    expect(f.jobs.size).toBe(2);
   });
 });

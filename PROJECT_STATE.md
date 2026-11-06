@@ -58,3 +58,21 @@ Not done / needs others: no real sign-in UI (A exposes `setSessionResolver` for 
 - Applying migrations to hosted Supabase (`supabase db push`) is a user step.
 - No browser-cookie session auth yet (only bearer JWT + resolver hook). No rate limiting. File upload (`fileRef`) is stored as a reference only; no upload endpoint.
 - RLS tests use shims for `auth`/`storage`; real Supabase storage policy behavior is unverified.
+
+## Agent B (discovery & applications) — 2026-11-06
+Code: `packages/workers/src/{normalize,score,stages,connectors,resume,apply}`, `resumes/evidence`. 125/125 workers tests pass (all agents' suites), `tsc` clean.
+
+**Working + tested**
+- normalize: ATS detection (Greenhouse both hosts, Lever, Ashby, `gh_jid` career pages, Workday/iCIMS/SmartRecruiters detected only), pasted-JD extraction (title/company/location/salary/deadline/internship/MBA/Summer-2027), structured input, sha256 `dedupeKey` (ATS id when known, else normalized company|title|location). Unknowns stay null; nothing guessed.
+- score: weighted by `Preferences.weights` + `roleOrder`; hard rejects (not internship, wrong season, undergrad-only, excluded company/location, pay below min) -> archive; unknown role -> archive; borderline -> needs_review. Each reject has a test.
+- stages: `runNormalizeStage`, `runScoreStage` verified on both a local fake and Agent A's `InMemoryStore` (duplicates become a `duplicate` row and are skipped by scoring; borderline raises an exception).
+- connectors: Greenhouse/Lever/Ashby parsers; field names checked against official docs (corrections applied: Greenhouse list has no `company_name`/`first_published`). Tested ONLY on documentation-derived fixtures (`test/fixtures/*.doc-derived.json`). `fetchFeed` was never called against a live API.
+- resume: evidence loader (refuses `*.synthetic.json`), 4 archetypes + selector, verbatim tailoring, verifier (numbers, proper nouns/titles, word traceability, header drift), optional `rephraseBullets` that falls back to verbatim on any failed check, single-column pdfkit PDF, `runResumeStage` (raises `missing_profile_field` when bank empty, `low_factual_confidence` on failure). Adversarial tests pass (fabricated 12 teams / 90% / Google / Director / $5M / 340% all rejected).
+- apply: Playwright (real headless Chromium installed in `/opt/pw-browsers`) against local fixture forms: dry-run fills and never submits (server-side hit counter = 0); live only when `mode=live && autoApply && adapter in verifiedAdapters` (default empty set); confirmation requires positive text evidence; unverified submits are never marked applied and are never retried; CAPTCHA / auth wall / required sensitive-eligibility / unknown required field -> exception, no bypass; optional EEO fields left blank; idempotent via `getOrCreateApplication`.
+
+**Not done / caveats**
+- Evidence bank is EMPTY (B-003): real tailoring cannot run until the user supplies resume/supporting docs. Only synthetic data was used in tests.
+- No adapter has been exercised on a real Greenhouse/Lever/Ashby page; selectors and confirmation patterns are best-effort and therefore every adapter is unverified. Live submission is off by design.
+- No daily application cap enforcement (`maxApplicationsPerDay`): `Store` has no count method; pipeline (E) should enforce.
+- Cover letter generation, pasted-file/PDF text extraction (`fileRef`), LLM-assisted extraction, and Workday/iCIMS adapters are not implemented. Salary is stored as given (hourly if < 500) rather than annualized.
+- Shared-file note: I created `src/llm.ts` while another agent's version may have existed (untracked, so unrecoverable); mine follows the contract. `test/fakeStore.ts` (Agent C) was briefly overwritten and restored from git.

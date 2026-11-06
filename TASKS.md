@@ -10,16 +10,16 @@ Status: TODO / DOING / DONE / BLOCKED. Update in place; do not delete rows.
 | A2 | RLS policies + cross-tenant isolation tests | A | DONE — 120 pglite tests: B cannot select/insert/update/delete A's rows on all 18 tables + storage; spoofed user_id rejected (tested on pglite, not live Supabase) | A1 | test proves user B cannot read/write user A rows |
 | A3 | `InMemoryStore` + `SupabaseStore` implementing `Store` | A | DONE (InMemory) / UNVERIFIED (Supabase) — conformance suite 12/12 on InMemoryStore; SupabaseStore typechecks, live suite skipped (no creds) | L1 | shared conformance test suite passes on both (Supabase one skipped w/o creds) |
 | A4 | `POST /api/ingest` (URL/text/file/structured), returns ingestionId immediately, idempotent | A | DONE — route tests 19/19 (accept, idempotent, validation, enqueue hook ok/fail/hang, auth, read endpoints, prefs, live-mode guard) | A3 | route test: 202-style accept, duplicate key returns same ID |
-| B1 | normalize + dedupe + ATS URL detection | B | TODO | L1 | unit tests on Greenhouse/Lever/Ashby URLs and messy text |
-| B2 | scoring engine against Preferences | B | TODO | B1 | unit tests incl. hard rejects |
+| B1 | normalize + dedupe + ATS URL detection | B | DONE (25 normalize/score tests)  | L1 | unit tests on Greenhouse/Lever/Ashby URLs and messy text |
+| B2 | scoring engine against Preferences | B | DONE  | B1 | unit tests incl. hard rejects |
 | E1 | pipeline orchestrator (stage runner, retries, DLQ) | E | TODO | A3,B1,B2 | e2e test with InMemoryStore |
 | D1 | app shell + Command Center + Pipeline + quick-ingest | D | DONE (demo data; swap `apps/web/src/lib/data.ts` to `getStore()`) | L1 | `next build` passes; works against demo store |
 ## Phase 2 — discovery connectors, evidence bank, resumes
-| B3 | Evidence bank loader + 4 archetypes + tailoring (evidence-only) + ATS PDF | B | TODO | L1 | factual-confidence check rejects any unverifiable line |
-| B4 | Public ATS feed connectors (Greenhouse/Lever/Ashby JSON) | B | TODO | B1 | parses recorded fixtures |
+| B3 | Evidence bank loader + 4 archetypes + tailoring (evidence-only) + ATS PDF | B | DONE (engine tested w/ synthetic data; real evidence bank EMPTY, see B-003)  | L1 | factual-confidence check rejects any unverifiable line |
+| B4 | Public ATS feed connectors (Greenhouse/Lever/Ashby JSON) | B | DONE (parsers vs doc-derived fixtures; NOT live-called)  | B1 | parses recorded fixtures |
 | E2 | Gmail alert parser, CSV/Sheet ingest, WhatsApp export parser | E | TODO | A4 | fixture tests |
 ## Phase 3 — application automation
-| B5 | Adapters Greenhouse/Lever/Ashby via Playwright, dry-run default, confirmation verification, idempotency | B | TODO | B3 | dry-run test on fixture form; no live submit without policy |
+| B5 | Adapters Greenhouse/Lever/Ashby via Playwright, dry-run default, confirmation verification, idempotency | B | DONE for dry-run + gated live (tested on local fixtures w/ real Chromium); adapters NOT verified on real ATS sites  | B3 | dry-run test on fixture form; no live submit without policy |
 ## Phase 4 — intelligence & outreach
 | C1 | Company research worker (+ labeled speculation) | C | DONE | L1 | output schema validated; sources recorded |
 | C2 | Proof-of-work template + deployable preview + Loom script | C | DONE | C1 | renders for sample company |
