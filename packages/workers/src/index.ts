@@ -7,3 +7,7 @@ export { runNormalizeStage, runScoreStage } from "./stages/index.js";
 export * from "./connectors/index.js";
 export * from "./contacts/index.js";
 export * from "./resume/index.js";
+export * from "./outreach/index.js";
+export * from "./pipeline/index.js";
+export * as notifications from "./notify/index.js";
+export * as gmail from "./gmail/index.js";

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { InMemoryStore } from "../../db/src/memory.js";
-import { alertToIngestRequests, classifyReply, createGmailConnectorFromEnv, csvToIngestRequests, gmailFromClient, handleInboundReply, parseAlertEmail, parseCsv, parseWhatsAppExport, rowsToIngestRequests, rfc822 } from "../src/gmail/index.js";
+import { alertToIngestRequests, classifyInbound, createGmailConnectorFromEnv, csvToIngestRequests, gmailFromClient, handleInboundReply, parseAlertEmail, parseCsv, parseWhatsAppExport, rowsToIngestRequests, rfc822 } from "../src/gmail/index.js";
 import { DryRunNotifier } from "../src/notify/index.js";
 import { ctx } from "./helpers.js";
 const fx = (n: string) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), "utf8");
@@ -33,7 +33,7 @@ describe("reply classifier + hooks", () => {
     ["Re:", "Reach out to Jane on my team, I'm looping her in.", "referral"],
     ["Re:", "Thanks for the note, interesting background.", "positive_reply"],
     ["Re:", "", "unknown"],
-  ])("%s -> %s", (s, b, c) => expect(classifyReply(s, b)).toBe(c));
+  ])("%s -> %s", (s, b, c) => expect(classifyInbound(s, b)).toBe(c));
 
   it("interview reply stops the sequence, advances job, notifies urgent", async () => {
     const s = new InMemoryStore(); const n = new DryRunNotifier();

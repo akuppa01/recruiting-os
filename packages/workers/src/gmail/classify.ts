@@ -2,7 +2,7 @@
 import type { Ctx, Store } from "@ros/core";
 import { notify, type Notifier } from "../notify/index.js";
 
-export type ReplyClass = "opt_out" | "rejection" | "interview" | "auto_reply" | "positive_reply" | "referral" | "unknown";
+export type InboundClass = "opt_out" | "rejection" | "interview" | "auto_reply" | "positive_reply" | "referral" | "unknown";
 
 const R = {
   opt: /\b(unsubscribe|remove me|stop (?:emailing|contacting|sending)|do not (?:contact|email)|don'?t (?:contact|email)|opt[- ]?out|take me off)\b/i,
@@ -13,7 +13,7 @@ const R = {
 };
 
 /** Order matters: opt-out and auto-reply win; rejection before interview wording ("unfortunately ... schedule"). */
-export function classifyReply(subject: string, body: string): ReplyClass {
+export function classifyInbound(subject: string, body: string): InboundClass {
   const t = `${subject}\n${body}`;
   if (R.auto.test(t)) return "auto_reply";
   if (R.opt.test(t)) return "opt_out";
@@ -23,11 +23,11 @@ export function classifyReply(subject: string, body: string): ReplyClass {
   return t.trim().length > 0 && body.trim().length > 8 ? "positive_reply" : "unknown";
 }
 
-export interface ReplyEvent { contactId: string; jobId?: string; subject: string; body: string; threadId?: string }
+export interface InboundReplyEvent { contactId: string; jobId?: string; subject: string; body: string; threadId?: string }
 
 /** Stop sequences on reply/rejection/opt-out; notify on important outcomes; never sends anything itself. */
-export async function handleInboundReply(store: Store, ctx: Ctx, notifier: Notifier, ev: ReplyEvent): Promise<{ class: ReplyClass; stopped: boolean }> {
-  const cls = classifyReply(ev.subject, ev.body);
+export async function handleInboundReply(store: Store, ctx: Ctx, notifier: Notifier, ev: InboundReplyEvent): Promise<{ class: InboundClass; stopped: boolean }> {
+  const cls = classifyInbound(ev.subject, ev.body);
   await store.logEvent(ctx, "reply.received", "contact", ev.contactId, { class: cls, threadId: ev.threadId ?? null, jobId: ev.jobId ?? null });
   if (cls === "auto_reply" || cls === "unknown") return { class: cls, stopped: false };
   const reason = cls === "opt_out" ? "opt_out" : cls === "rejection" ? "rejection" : "replied";

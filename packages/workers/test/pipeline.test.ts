@@ -155,3 +155,15 @@ describe("pipeline e2e (InMemoryStore)", () => {
     expect(calls).toEqual(["contacts"]);
   });
 });
+
+describe("blocking exceptions", () => {
+  it("open exception raised by resume stage blocks applying", async () => {
+    const s = new InMemoryStore(); await dry(s); let applied = false;
+    const i = await enqueueIngestion(s, ctx, { source: "manual_text", text: JD });
+    await runPipeline(s, ctx, i.ingestionId, base({
+      resume: async (st, c, jobId) => { await st.raiseException(c, { ctx: c, type: "missing_profile_field", entityType: "job", entityId: jobId, detail: "Evidence bank is empty" }); },
+      apply: async () => { applied = true; return { status: "dry_run", confirmed: false, confirmationEvidence: null, exception: null }; },
+    }), opts);
+    expect(applied).toBe(false); expect([...s.jobs.values()][0]!.stage).toBe("needs_human"); expect(kinds(s)).toContain("application.skipped_blocked");
+  });
+});

@@ -69,8 +69,13 @@ export async function runPipeline(store: Store, ctx: Ctx, ingestionId: string, s
     // 4. Score
     if (rank((await cur()).stage) <= 2) await step("score", () => stages.score(store, ctx, id));
     job = await cur();
-    if (rank(job.stage) <= 3) {
-      // 5. Archive or qualify (policy threshold enforced here, regardless of scorer decision)
+    if (job.stage === "archived") { // scorer archived it itself
+      await store.logEvent(ctx, "job.archived", "job", id, { total: job.score?.total ?? null, hardRejects: job.score?.hardRejects ?? [] });
+      await store.updateIngestion(ctx, ingestionId, { status: "done" });
+      return { status: "done", jobId: id, stage: "archived" };
+    }
+    if (job.stage === "scored" || job.stage === "qualified") {
+      // 5. Archive or qualify. Policy threshold is enforced here regardless of what the scorer decided.
       const sc = job.score;
       if (!sc) throw new StageFailure("score", "scorer did not persist a score", id);
       if (sc.hardRejects.length > 0 || sc.decision === "archive" || sc.total < policy.minScoreToApply) {
@@ -80,22 +85,31 @@ export async function runPipeline(store: Store, ctx: Ctx, ingestionId: string, s
         return { status: "done", jobId: id, stage: "archived" };
       }
       if (sc.decision === "needs_review") {
-        await store.raiseException(ctx, { ctx, type: "low_factual_confidence", entityType: "job", entityId: id, detail: `Scorer flagged needs_review: ${sc.rationale}` });
+        const open = (await store.listExceptions(ctx, true)).some((x) => x.entityType === "job" && x.entityId === id);
+        if (!open) await store.raiseException(ctx, { ctx, type: "low_factual_confidence", entityType: "job", entityId: id, detail: `Scorer flagged needs_review: ${sc.rationale}` });
         await store.setJobStage(ctx, id, "needs_human", sc);
         await notify(store, ctx, notifier, { kind: "exception", title: "Job needs review", body: `${job.normalized.company} — ${job.normalized.title}` }, { quiet: policy.quietHours, now: now() });
         await store.updateIngestion(ctx, ingestionId, { status: "done" });
         return { status: "done", jobId: id, stage: "needs_human" };
       }
-      await store.setJobStage(ctx, id, "qualified", sc);
+      if (job.stage !== "qualified") await store.setJobStage(ctx, id, "qualified", sc);
       await store.logEvent(ctx, "job.qualified", "job", id, { total: sc.total });
       if (sc.total >= policy.minScoreForProofOfWork) await notify(store, ctx, notifier, { kind: "high_score_job", title: `High-fit job (${sc.total})`, body: `${job.normalized.company} — ${job.normalized.title}` }, { quiet: policy.quietHours, now: now() });
     }
 
     // 6-7. Resume + cover letter (needed for application; skipped stage logs are explicit)
     job = await cur();
-    if (job.stage === "qualified") {
+    if (job.stage === "qualified" || job.stage === "applying") {
       await optional("resume", stages.resume, id);
       await optional("coverLetter", stages.coverLetter, id);
+
+      // A stage that raised an open exception on this job (e.g. empty evidence bank, low factual confidence) blocks applying.
+      const blocking = (await store.listExceptions(ctx, true)).filter((x) => x.entityType === "job" && x.entityId === id);
+      if (blocking.length > 0) {
+        await store.logEvent(ctx, "application.skipped_blocked", "job", id, { exceptions: blocking.map((b) => b.type) });
+        await store.setJobStage(ctx, id, "needs_human");
+        await notify(store, ctx, notifier, { kind: "exception", title: "Job blocked before applying", body: `${job.normalized.company}: ${blocking[0]!.detail}` });
+      } else
 
       // 8-10. Apply under policy gating; orchestrator enforces confirmation rule + idempotency
       await applyUnderPolicy(store, ctx, id, stages, prefs, step, notifier, now);
