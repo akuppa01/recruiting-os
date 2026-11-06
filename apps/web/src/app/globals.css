@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --chalk: 237 240 238;
+  --paper: 248 250 249;
+  --ink: 16 33 46;
+  --soft: 84 104 112;
+  --mist: 201 211 209;
+  --teal: 15 107 111;
+  --amber: 163 112 0;
+  --rust: 178 58 43;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --chalk: 14 24 31;
+    --paper: 21 34 43;
+    --ink: 229 236 234;
+    --soft: 147 165 170;
+    --mist: 43 62 71;
+    --teal: 86 190 192;
+    --amber: 232 176 52;
+    --rust: 240 128 112;
+  }
+}
+html { background: rgb(var(--chalk)); color: rgb(var(--ink)); }
+body { font-feature-settings: "tnum" 1, "lnum" 1; -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid rgb(var(--teal)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+@layer components {
+  .page-title { @apply font-serif text-3xl md:text-4xl leading-tight tracking-tight; }
+  .rule { @apply border-t border-mist; }
+  .panel { @apply bg-paper border border-mist rounded-board; }
+  .btn { @apply inline-flex items-center justify-center gap-2 px-4 min-h-[44px] rounded-board border border-ink bg-ink text-chalk text-sm font-medium hover:opacity-90 disabled:opacity-50; }
+  .btn-quiet { @apply inline-flex items-center justify-center px-3 min-h-[44px] md:min-h-[36px] rounded-board border border-mist text-sm hover:bg-chalk; }
+  .field { @apply w-full min-h-[44px] px-3 rounded-board border border-mist bg-paper text-sm placeholder:text-soft; }
+}
