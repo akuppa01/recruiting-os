@@ -132,6 +132,21 @@ importers:
         specifier: ^0.13.4
         version: 0.13.9
 
+  tests:
+    dependencies:
+      '@ros/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@ros/db':
+        specifier: workspace:*
+        version: link:../packages/db
+      '@ros/mcp-server':
+        specifier: workspace:*
+        version: link:../packages/mcp-server
+      '@ros/workers':
+        specifier: workspace:*
+        version: link:../packages/workers
+
 packages:
 
   '@alloc/quick-lru@5.3.0':

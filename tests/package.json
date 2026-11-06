@@ -1,0 +1,3 @@
+{ "name": "@ros/e2e", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "typecheck": "tsc --noEmit -p .", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@ros/core": "workspace:*", "@ros/db": "workspace:*", "@ros/workers": "workspace:*", "@ros/mcp-server": "workspace:*" } }
