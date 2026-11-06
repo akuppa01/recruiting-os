@@ -22,7 +22,7 @@ beforeEach(async () => {
   store = new InMemoryStore();
   resetStoreForTests(store);
   await seedDemo(store);
-  setEnqueue(null);
+  setEnqueue(async () => {}); // no-op hook: bootPipeline() skips when a hook exists
 });
 afterEach(() => { setEnqueue(null); vi.restoreAllMocks(); });
 

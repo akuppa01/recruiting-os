@@ -1,6 +1,11 @@
 # PROJECT_STATE.md
 
-Last updated: 2026-11-06 (lead, cycle 1 start)
+Last updated: 2026-11-06 (lead, end of cycle 1)
+
+## Cycle 1 integrated status (lead)
+Working, tested: `bash scripts/verify.sh` with VERIFY_WEB=1 -> install, 6 typechecks, `next build` PASS; tests: core/db 138 (+12 skipped live-Supabase), workers 127, mcp 8, e2e 9, web 19, all pass.
+Real vertical slice run against `next start`: POST /api/ingest (pasted JD) -> 202 + id -> in-process pipeline -> job normalized (company/title/location parsed), scored 78.9 (qualify) -> stopped at needs_human with exception "Evidence bank is empty" (correct: B-003). GET /api/jobs, /api/pipeline reflect it. Demo store only (in-memory, not Supabase).
+NOT verified: any live Supabase, Anthropic, Gmail, n8n, Apollo/Snov, ATS page, push. Apply adapter not passed to the default stages. No sign-in UI. Missing: exception resolve + Store.getContact (CR-1), resume upload, cover letters, proactive routes for MCP company/application/outreach tools, /api/internal/* for n8n, stale-`processing` reaper.
 
 ## What actually works (tested)
 - Repo skeleton + shared contracts in `packages/core` (typecheck: see below once run).
