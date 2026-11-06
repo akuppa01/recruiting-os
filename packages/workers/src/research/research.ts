@@ -1,5 +1,7 @@
 import type { Ctx, Store } from "@ros/core";
-import { complete, llmAvailable } from "../llm.js";
+import { complete } from "../llm.js";
+
+const llmAvailable = (): boolean => !!process.env.ANTHROPIC_API_KEY;
 import { defaultFetcher } from "./fetcher.js";
 import {
   Claim, CompanyResearch, Idea, RESEARCH_DISCLAIMER,
