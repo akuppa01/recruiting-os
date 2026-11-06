@@ -21,10 +21,10 @@ Status: TODO / DOING / DONE / BLOCKED. Update in place; do not delete rows.
 ## Phase 3 — application automation
 | B5 | Adapters Greenhouse/Lever/Ashby via Playwright, dry-run default, confirmation verification, idempotency | B | TODO | B3 | dry-run test on fixture form; no live submit without policy |
 ## Phase 4 — intelligence & outreach
-| C1 | Company research worker (+ labeled speculation) | C | TODO | L1 | output schema validated; sources recorded |
-| C2 | Proof-of-work template + deployable preview + Loom script | C | TODO | C1 | renders for sample company |
-| C3 | Contact discovery/ranking (provider-agnostic) | C | TODO | C1 | ranking unit tests |
-| C4 | Outreach sequences, follow-ups, reply/opt-out suppression | C | TODO | C3 | suppression tests |
+| C1 | Company research worker (+ labeled speculation) | C | DONE | L1 | output schema validated; sources recorded |
+| C2 | Proof-of-work template + deployable preview + Loom script | C | DONE | C1 | renders for sample company |
+| C3 | Contact discovery/ranking (provider-agnostic) | C | DONE | C1 | ranking unit tests |
+| C4 | Outreach sequences, follow-ups, reply/opt-out suppression | C | DONE | C3 | suppression tests |
 ## Phase 5 — mobile, push, conversational control
 | E3 | MCP server with 10 tools + Claude Project instruction file | E | TODO | A4 | tool contract tests |
 | E4 | Push notifications (ntfy/Pushover/web push adapter) | E | TODO | E1 | dry-run adapter tested |
