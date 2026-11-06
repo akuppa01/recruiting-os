@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AutomationPolicy, IngestRequest, JobStage, Preferences, type IngestResponse } from "@ros/core";
 import { getStoreAsync } from "./store";
 import { enqueueIngestion } from "./enqueue";
+import { bootPipeline } from "./pipeline-boot";
 import { err, json, UUID_RE, withAuth } from "./http";
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -31,6 +32,7 @@ export const postIngest = withAuth(async (req, ctx) => {
   if (isNew) {
     await store.logEvent(ctx, "ingestion.accepted", "ingestion", row.id, { source: request.source });
     // Never fail the request because the pipeline trigger is down: the poller claims 'accepted' rows.
+    bootPipeline();
     const r = await enqueueIngestion(ctx, row.id);
     if (r.outcome === "failed" || r.outcome === "timeout")
       await store.logEvent(ctx, "ingestion.enqueue_" + r.outcome, "ingestion", row.id, { error: r.error ?? null });
@@ -111,4 +113,19 @@ export const getExceptions = withAuth(async (req, ctx) => {
   const open = new URL(req.url).searchParams.get("open") !== "false";
   const exceptions = await (await getStoreAsync()).listExceptions(ctx, open);
   return json({ exceptions, count: exceptions.length });
+});
+
+// POST /api/chief-of-staff {question}. No LLM yet: answers from database counts only and says so (source:"database").
+export const chiefOfStaff = withAuth(async (req, ctx) => {
+  const body = await req.json().catch(() => ({}));
+  const q = typeof body?.question === "string" ? body.question.slice(0, 2000) : "";
+  const store = await getStoreAsync();
+  const [counts, open] = await Promise.all([store.pipelineCounts(ctx), store.listExceptions(ctx, true)]);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const lines = Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(", ") || "no jobs yet";
+  return json({
+    source: "database",
+    question: q,
+    answer: `Pipeline has ${total} jobs (${lines}). ${open.length} open exception(s). Free-form answers need the Anthropic AI worker, which is not wired yet.`,
+  });
 });

@@ -17,3 +17,9 @@ Automated sends: Gmail (user's authorized mailbox) only. LinkedIn/X: generate dr
 
 ## Contract change requests
 (append below: `CR-n by <agent>: <what/why>`)
+
+## D-006 Pipeline trigger (2026-11-06)
+Ingest route boots the pipeline: n8n webhook when N8N_* env set, else in-process fire-and-forget (dev/demo). Ingestions stay `accepted` if the process dies; any `processPending` call recovers them. Production should use n8n or a cron-called worker, not in-process.
+
+## CR-1 by lead: Store lacks `resolveException` and `getContact`
+UI exception "resolve" and outreach tick (`lookupContact`) need them. Add to core `Store` + both implementations. Not done in cycle 1.

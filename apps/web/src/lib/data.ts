@@ -9,7 +9,19 @@ export const isDemoMode = () => !process.env.NEXT_PUBLIC_SUPABASE_URL;
 const empty = <T,>(): T[] => [];
 const pick = <T,>(rows: T[]): T[] => (isDemoMode() ? rows : empty<T>());
 
-export async function getJobs() { return pick(demo.demoJobs); }
+export async function getJobs(): Promise<demo.JobView[]> {
+  if (!isDemoMode()) return []; // no session UI yet: real tenants are served via the authenticated API only
+  const { getStoreAsync, DEMO_CTX } = await import("./store");
+  const rows = await (await getStoreAsync()).searchJobs(DEMO_CTX, { limit: 200 });
+  return rows.map((r) => ({
+    id: r.id, title: r.normalized.title, company: r.normalized.company, location: r.normalized.location ?? "—",
+    stage: r.stage, roleCategory: r.normalized.roleCategory, score: r.score?.total ?? null, deadline: r.normalized.deadline,
+    salary: r.normalized.salaryMin ? `$${r.normalized.salaryMin}${r.normalized.salaryMax && r.normalized.salaryMax !== r.normalized.salaryMin ? `–${r.normalized.salaryMax}` : ""}` : null,
+    atsKind: r.normalized.atsKind,
+    breakdown: r.score ? { roleFit: r.score.roleFit, comp: r.score.comp, conversion: r.score.conversion, responsibility: r.score.responsibility, flexibility: r.score.flexibility, upside: r.score.upside, entrepreneurialCompat: r.score.entrepreneurialCompat } : null,
+    rationale: r.score?.rationale ?? null, updatedAt: r.updatedAt,
+  }));
+}
 export async function getCompanies() { return pick(demo.demoCompanies); }
 export async function getApplications() { return pick(demo.demoApplications); }
 export async function getContacts() { return pick(demo.demoContacts); }
