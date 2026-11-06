@@ -12,12 +12,12 @@ Status: TODO / DOING / DONE / BLOCKED. Update in place; do not delete rows.
 | A4 | `POST /api/ingest` (URL/text/file/structured), returns ingestionId immediately, idempotent | A | DONE — route tests 19/19 (accept, idempotent, validation, enqueue hook ok/fail/hang, auth, read endpoints, prefs, live-mode guard) | A3 | route test: 202-style accept, duplicate key returns same ID |
 | B1 | normalize + dedupe + ATS URL detection | B | DONE (25 normalize/score tests)  | L1 | unit tests on Greenhouse/Lever/Ashby URLs and messy text |
 | B2 | scoring engine against Preferences | B | DONE  | B1 | unit tests incl. hard rejects |
-| E1 | pipeline orchestrator (stage runner, retries, DLQ) | E | TODO | A3,B1,B2 | e2e test with InMemoryStore |
+| E1 | pipeline orchestrator (stage runner, retries, DLQ) | E | DONE | A3,B1,B2 | e2e test with InMemoryStore — tested: 16 pipeline tests incl. dead-letter, idempotency, policy gates; real B/C stages wired via createDefaultStages (smoke test) |
 | D1 | app shell + Command Center + Pipeline + quick-ingest | D | DONE (demo data; swap `apps/web/src/lib/data.ts` to `getStore()`) | L1 | `next build` passes; works against demo store |
 ## Phase 2 — discovery connectors, evidence bank, resumes
 | B3 | Evidence bank loader + 4 archetypes + tailoring (evidence-only) + ATS PDF | B | DONE (engine tested w/ synthetic data; real evidence bank EMPTY, see B-003)  | L1 | factual-confidence check rejects any unverifiable line |
 | B4 | Public ATS feed connectors (Greenhouse/Lever/Ashby JSON) | B | DONE (parsers vs doc-derived fixtures; NOT live-called)  | B1 | parses recorded fixtures |
-| E2 | Gmail alert parser, CSV/Sheet ingest, WhatsApp export parser | E | TODO | A4 | fixture tests |
+| E2 | Gmail alert parser, CSV/Sheet ingest, WhatsApp export parser | E | DONE | A4 | fixture tests — Gmail alert parser, CSV/Sheet rows, WhatsApp export: 17 fixture tests; Gmail poll HTTP route not wired |
 ## Phase 3 — application automation
 | B5 | Adapters Greenhouse/Lever/Ashby via Playwright, dry-run default, confirmation verification, idempotency | B | DONE for dry-run + gated live (tested on local fixtures w/ real Chromium); adapters NOT verified on real ATS sites  | B3 | dry-run test on fixture form; no live submit without policy |
 ## Phase 4 — intelligence & outreach
@@ -26,10 +26,10 @@ Status: TODO / DOING / DONE / BLOCKED. Update in place; do not delete rows.
 | C3 | Contact discovery/ranking (provider-agnostic) | C | DONE | C1 | ranking unit tests |
 | C4 | Outreach sequences, follow-ups, reply/opt-out suppression | C | DONE | C3 | suppression tests |
 ## Phase 5 — mobile, push, conversational control
-| E3 | MCP server with 10 tools + Claude Project instruction file | E | TODO | A4 | tool contract tests |
-| E4 | Push notifications (ntfy/Pushover/web push adapter) | E | TODO | E1 | dry-run adapter tested |
+| E3 | MCP server with 10 tools + Claude Project instruction file | E | DONE | A4 | tool contract tests — 10 tools + stdio + streamable-HTTP; 8 tests vs mock API. Real /api routes are Agent A (see docs/API_CONTRACT.md) |
+| E4 | Push notifications (ntfy/Pushover/web push adapter) | E | DONE | E1 | dry-run adapter tested — ntfy/Pushover/dry-run adapters, mocked-fetch tests; never sent to a real device |
 | D2 | remaining pages (11 total), exceptions queue, AI chief-of-staff chat | D | DONE for UI; needs /api/chief-of-staff, /api/exceptions/:id/resolve, /api/resume | D1 | all routes build |
 ## Phase 6 — reliability & productization
-| E5 | n8n workflows (export JSON), retry/DLQ docs, monitoring | E | TODO | E1 | JSON validates |
+| E5 | n8n workflows (export JSON), retry/DLQ docs, monitoring | E | DONE | E1 | JSON validates — 7 workflows generated + structurally validated; NOT run in live n8n |
 | A5 | export/deletion, usage metering, cost tracking, feature flags | A | DONE (in-memory tested) — packages/db/src/admin.ts usage metering, flags, export, delete; SupabaseAdmin typechecks only | A3 | tests |
 | D3 | onboarding wizard | D | DONE for UI; save needs auth + /api/resume | D2 | route builds |
