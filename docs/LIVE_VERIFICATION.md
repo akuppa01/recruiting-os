@@ -32,10 +32,10 @@ Updated in-place after each check. Status values: **untested** / **pass** / **fa
 
 | # | Check | Status | Date | Evidence |
 |---|-------|--------|------|----------|
-| B.1 | `.env.local` has all required vars | **untested** | – | – |
-| B.2 | App runs locally with live Supabase + `ROS_AUTOMATION_MODE=dry_run` | **untested** | – | – |
+| B.1 | `.env.local` has all required vars | **pass** | 2026-11-06 | 7 vars present: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ROS_API_TOKEN`, `ROS_AUTOMATION_MODE=dry_run`, `DATABASE_URL` (placeholder — not used by Next.js app). All 6 app-required vars confirmed. |
+| B.2 | App runs locally with live Supabase + `ROS_AUTOMATION_MODE=dry_run` | **pass** | 2026-11-06 | Next.js 15.5.29 dev server on port 3000; `✓ Ready in 774.1s` (Spotlight indexing caused slow startup — see BLOCKERS.md); `✓ Compiled / in 691.3s (694 modules)`; subsequent requests 96ms. Full Recruiting OS UI served: nav, Command Center page with "Today" header, "Add a job" form, pipeline sections. `GET / 200`. |
 | B.3 | Google sign-in creates tenant (first login) and is idempotent (second login) | **untested** | – | Depends on A.5 |
-| B.4 | Evidence bank imported into `evidence_items` (32 usable, 5 quarantined) | **untested** | – | Script: `scripts/import-evidence-to-supabase.mjs` |
+| B.4 | Evidence bank imported into `evidence_items` (32 usable, 5 quarantined) | **user-action-needed** | – | `evidence_items` table has 0 rows. Re-supply real items to `resumes/evidence/private/*.json` (git-ignored; lost after machine restart), then create + run `scripts/import-evidence-to-supabase.mjs`. See BLOCKERS.md B-003. |
 | B.5 | 3 real JDs ingested, normalized, scored, tailored; DB rows confirmed | **untested** | – | Needs JDs from user (samples/jds/ is empty) |
 | B.6 | Negative tests (no company name, empty paste, dedupe, no auth, bad token, quarantined evidence, prompt injection) | **untested** | – | – |
 | B.7 | Live Anthropic call: stub replaced when key set, token/cost per ingest, failures degrade to `needs_human` | **untested** | – | – |
