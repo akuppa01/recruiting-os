@@ -33,7 +33,7 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
             {rows.map((j) => (
               <li key={j.id}>
                 <Link href={`/explorer?job=${j.id}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ""}`} className={`flex items-center gap-4 p-4 hover:bg-chalk ${sel?.id === j.id ? "bg-chalk" : ""}`}>
-                  <span className="w-10 text-center"><Score value={j.score} /></span>
+                  <span className="w-14 shrink-0 text-center"><Score value={j.score} /></span>
                   <span className="min-w-0 flex-1"><span className="block font-medium truncate">{j.title}</span><span className="block text-sm text-soft truncate">{j.company} · {j.location}</span></span>
                   <Badge tone={j.stage === "archived" ? "neutral" : "good"}>{STAGE_LABEL[j.stage]}</Badge>
                 </Link>

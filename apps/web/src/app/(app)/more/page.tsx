@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NAV } from "@/components/nav";
+import { NAV } from "@/lib/nav";
 import { PageHeader } from "@/components/ui";
 
 export default function More() {

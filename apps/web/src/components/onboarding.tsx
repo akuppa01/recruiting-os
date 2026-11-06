@@ -51,7 +51,7 @@ export function Onboarding({ integrations }: { integrations: Item[] }) {
           </label>
           <div className="mt-3 flex items-center gap-3">
             <button className="btn" disabled={!file || upload === "busy"} onClick={doUpload}>{upload === "busy" ? "Uploading…" : "Upload resume"}</button>
-            <span role="status" className="text-sm">{upload === "ok" && <span className="text-teal">Uploaded.</span>}{upload === "err" && <span className="text-rust">Upload failed. The upload endpoint isn't available yet, so nothing was stored.</span>}</span>
+            <span role="status" className="text-sm">{upload === "ok" && <span className="text-teal">Uploaded.</span>}{upload === "err" && <span className="text-rust">Upload failed, so nothing was stored. Check that you're signed in and the upload endpoint exists.</span>}</span>
           </div>
         </section>
       )}
@@ -78,7 +78,7 @@ export function Onboarding({ integrations }: { integrations: Item[] }) {
             <button className="btn" onClick={finish} disabled={final === "busy"}>{final === "busy" ? "Saving…" : "Finish setup"}</button>
             <span role="status" className="text-sm">
               {final === "ok" && <span className="text-teal">Saved. <Link className="underline" href="/">Go to Today</Link></span>}
-              {final === "err" && <span className="text-rust">Couldn't save. The preferences API isn't available yet, so nothing changed.</span>}
+              {final === "err" && <span className="text-rust">Couldn't save, so nothing changed. Check that you're signed in and the server is running.</span>}
             </span>
           </div>
         </section>

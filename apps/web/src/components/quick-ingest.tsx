@@ -19,7 +19,7 @@ export function QuickIngest() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(isUrl ? { source: "manual_url", url: v } : { source: "manual_text", text: v }),
       });
-      if (!res.ok) throw new Error(res.status === 404 ? "The ingest endpoint isn't deployed yet." : `Ingest failed (${res.status}).`);
+      if (!res.ok) throw new Error(res.status === 401 ? "You're not signed in." : res.status === 404 ? "The ingest endpoint isn't deployed." : `Ingest failed (${res.status}).`);
       const json = (await res.json()) as { ingestionId?: string };
       if (!json.ingestionId) throw new Error("The server accepted the request but returned no ingestion ID.");
       setState({ kind: "ok", id: json.ingestionId });

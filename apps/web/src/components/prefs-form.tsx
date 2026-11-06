@@ -44,7 +44,7 @@ export function PrefsForm({ initial = DEFAULT_PREFS, onChange, bare }: { initial
       {!bare && (
         <div className="mt-4 flex items-center gap-3">
           <button className="btn" onClick={save} disabled={status === "busy"}>{status === "busy" ? "Saving…" : "Save preferences"}</button>
-          <span role="status" className="text-sm">{status === "saved" && <span className="text-teal">Saved.</span>}{status === "err" && <span className="text-rust">Couldn't save. The preferences API isn't available yet, so nothing changed.</span>}</span>
+          <span role="status" className="text-sm">{status === "saved" && <span className="text-teal">Saved.</span>}{status === "err" && <span className="text-rust">Couldn't save, so nothing changed. Check that you're signed in and the server is running.</span>}</span>
         </div>
       )}
     </div>

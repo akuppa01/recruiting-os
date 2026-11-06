@@ -17,7 +17,7 @@ export function Chat() {
     setV(""); setBusy(true);
     try {
       const r = await fetch("/api/chief-of-staff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text }) });
-      if (!r.ok) throw new Error(r.status === 404 ? "The Chief of Staff service isn't deployed yet. Your message wasn't processed." : `The service returned an error (${r.status}).`);
+      if (!r.ok) throw new Error(r.status === 401 ? "You're not signed in. Your message wasn't processed." : r.status === 404 ? "The Chief of Staff service isn't deployed yet. Your message wasn't processed." : `The service returned an error (${r.status}).`);
       const j = (await r.json()) as { reply?: string };
       setMsgs((m) => [...m, { role: "chief", text: j.reply ?? "The service returned an empty reply." }]);
     } catch (err) {

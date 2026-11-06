@@ -13,9 +13,10 @@ export default async function CommandCenter() {
   return (
     <>
       <PageHeader title="Today" lede={day} />
+      <div className="flex flex-col">
 
       {/* Mobile-first order: things needing you, replies, quick add, then the board. */}
-      <section aria-labelledby="attn" className="mb-8">
+      <section aria-labelledby="attn" className="mb-8 order-1">
         <h2 id="attn" className="font-serif text-xl mb-3">
           {open.length ? `${open.length} ${open.length === 1 ? "thing needs" : "things need"} you` : "Nothing needs you"}
         </h2>
@@ -37,7 +38,7 @@ export default async function CommandCenter() {
         )}
       </section>
 
-      <section aria-labelledby="upd" className="mb-8">
+      <section aria-labelledby="upd" className="mb-8 order-2 md:order-3">
         <h2 id="upd" className="font-serif text-xl mb-3">Replies and interviews</h2>
         {updates.length === 0 ? (
           <Empty title="No replies yet" action="When a recruiter or contact replies, it appears here first." />
@@ -54,31 +55,32 @@ export default async function CommandCenter() {
         )}
       </section>
 
-      <div className="mb-8"><QuickIngest /></div>
+      <div className="mb-8 order-3 md:order-4"><QuickIngest /></div>
 
-      <section aria-labelledby="board">
+      <section aria-labelledby="board" className="mb-8 order-4 md:order-2">
         <h2 id="board" className="font-serif text-xl mb-3">The board</h2>
         {board.length === 0 ? (
           <Empty title="Your pipeline is empty" action="Add a job above, or connect Gmail alerts in Settings." />
         ) : (
-          <div className="bg-ink text-chalk rounded-board overflow-hidden" role="table" aria-label="Top opportunities">
-            <div role="row" className="hidden md:grid grid-cols-[3rem_1fr_1fr_9rem_6rem] gap-4 px-4 py-2 text-xs text-chalk/60 border-b border-chalk/15">
+          <div className="bg-[#10212E] text-[#EDF0EE] border border-mist rounded-board overflow-hidden" role="table" aria-label="Top opportunities">
+            <div role="row" className="hidden md:grid grid-cols-[3rem_1fr_1fr_9rem_6rem] gap-4 px-4 py-2 text-xs text-[#EDF0EE]/60 border-b border-[#EDF0EE]/15">
               <span role="columnheader">Score</span><span role="columnheader">Company</span><span role="columnheader">Role</span><span role="columnheader">Location</span><span role="columnheader">Status</span>
             </div>
             {board.map((j) => (
               <Link key={j.id} href={`/explorer?job=${j.id}`} role="row"
-                className="grid grid-cols-[3rem_1fr_auto] md:grid-cols-[3rem_1fr_1fr_9rem_6rem] gap-x-4 gap-y-0.5 px-4 py-3 border-b border-chalk/10 last:border-0 hover:bg-chalk/5">
+                className="grid grid-cols-[3rem_1fr_auto] md:grid-cols-[3rem_1fr_1fr_9rem_6rem] gap-x-4 gap-y-0.5 px-4 py-3 border-b border-[#EDF0EE]/10 last:border-0 hover:bg-[#EDF0EE]/5">
                 <span role="cell" className="font-serif text-2xl tabular-nums row-span-2 md:row-span-1 self-center">{j.score ?? "–"}</span>
                 <span role="cell" className="font-medium truncate">{j.company}</span>
-                <span role="cell" className="text-chalk/80 truncate md:order-none col-start-2 md:col-start-auto">{j.title}</span>
-                <span role="cell" className="hidden md:block text-chalk/70 truncate">{j.location}</span>
-                <span role="cell" className={`text-sm self-center row-span-2 md:row-span-1 ${j.stage === "needs_human" ? "text-[#f0c15a]" : j.stage === "interviewing" ? "text-[#7fd6d8]" : "text-chalk/80"}`}>{STAGE_LABEL[j.stage]}</span>
+                <span role="cell" className="text-[#EDF0EE]/80 truncate md:order-none col-start-2 md:col-start-auto">{j.title}</span>
+                <span role="cell" className="hidden md:block text-[#EDF0EE]/70 truncate">{j.location}</span>
+                <span role="cell" className={`text-sm self-center row-span-2 md:row-span-1 ${j.stage === "needs_human" ? "text-[#f0c15a]" : j.stage === "interviewing" ? "text-[#7fd6d8]" : "text-[#EDF0EE]/80"}`}>{STAGE_LABEL[j.stage]}</span>
               </Link>
             ))}
           </div>
         )}
         
       </section>
+      </div>
     </>
   );
 }

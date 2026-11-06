@@ -14,7 +14,7 @@ export function ResolveButton({ id }: { id: string }) {
   return (
     <span className="flex items-center gap-2">
       <button onClick={go} disabled={s === "busy"} className="btn-quiet">{s === "busy" ? "Resolving…" : "Mark resolved"}</button>
-      {s === "err" && <span role="alert" className="text-xs text-rust">Couldn't resolve. The API isn't available yet.</span>}
+      {s === "err" && <span role="alert" className="text-xs text-rust">Couldn't resolve. Check that you're signed in and the server is running.</span>}
     </span>
   );
 }
