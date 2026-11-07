@@ -2,15 +2,34 @@ import Link from "next/link";
 import { SideNav, TabBar } from "@/components/nav";
 import { DemoBanner } from "@/components/ui";
 import { isDemoMode } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  let userEmail: string | null = null;
+  if (!isDemoMode()) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    userEmail = user?.email ?? null;
+  }
+
   return (
     <div className="md:grid md:grid-cols-[232px_1fr] min-h-screen">
       <aside className="hidden md:block bg-paper border-r border-mist sticky top-0 h-screen overflow-y-auto">
         <Link href="/" className="block px-6 pt-6 pb-3 font-serif text-xl">Recruiting OS</Link>
         <SideNav />
+        {userEmail && (
+          <div className="px-6 pt-4 pb-6 mt-auto border-t border-mist">
+            <p className="text-xs text-gray-500 truncate mb-2">{userEmail}</p>
+            <Link
+              href="/auth/logout"
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Sign out
+            </Link>
+          </div>
+        )}
       </aside>
       <div className="min-w-0">
         {isDemoMode() && <DemoBanner />}

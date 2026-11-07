@@ -1,3 +1,4 @@
+import "@/lib/session-init"; // wire cookie-session resolver before any authenticate() call
 import { z } from "zod";
 import { AutomationPolicy, IngestRequest, JobStage, Preferences, type IngestResponse } from "@ros/core";
 import { getStoreAsync } from "./store";
