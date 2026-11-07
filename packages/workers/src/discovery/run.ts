@@ -30,7 +30,10 @@ export async function runDiscovery(ctx: Ctx, deps: RunDiscoveryDeps): Promise<Ru
 
   for (const { r } of results) {
     for (const d0 of r.jobs) {
-      const raw = d0.canonicalUrl ?? d0.job.applyUrl ?? d0.job.sourceUrl ?? null;
+      // An adapter that reports no canonical URL for a job that still needs enrichment (e.g. an unresolved email tracking link)
+      // is saying the URL is NOT an identity: every such link canonicalizes to the same address and would collapse all jobs into one.
+      const urlIsIdentity = !(d0.needsEnrichment && !d0.canonicalUrl);
+      const raw = urlIsIdentity ? (d0.canonicalUrl ?? d0.job.applyUrl ?? d0.job.sourceUrl ?? null) : null;
       const canonicalUrl = raw ? canonicalizeUrl(raw) : null;
       const d: DiscoveredJob = { ...d0, canonicalUrl };
       const uk = canonicalUrl ? urlKey(canonicalUrl) : null;
