@@ -131,7 +131,6 @@ export const chiefOfStaff = withAuth(async (req, ctx) => {
   const store = await getStoreAsync();
   return json({ question: q, ...(await answerQuestion(store, ctx, q)) });
 });
-});
 
 export const resolveExceptionHandler = (id: string) => withAuth(async (_req, ctx) => {
   if (!UUID_RE.test(id)) return err(400, "invalid_id");
