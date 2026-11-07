@@ -5,6 +5,7 @@ export type FieldKey =
 
 export type FieldClass =
   | { kind: "known"; key: FieldKey }
+  | { kind: "essay" }                    // free-text question: drafted from verified facts, never invented
   | { kind: "sensitive"; topic: string }   // eligibility/EEO/legal questions: never auto-answered
   | { kind: "unknown" };
 
@@ -37,6 +38,7 @@ export function classifyField(label: string, name = "", type = ""): FieldClass {
   if (type === "file") return /cover/i.test(hay) ? { kind: "known", key: "cover_letter_file" } : /resume|cv/i.test(hay) || !hay ? { kind: "known", key: "resume" } : { kind: "unknown" };
   for (const [topic, re] of SENSITIVE) if (re.test(hay)) return { kind: "sensitive", topic };
   for (const [key, re] of KNOWN) if (re.test(label.trim()) || re.test(name)) return { kind: "known", key };
+  if (type === "textarea" && label.trim()) return { kind: "essay" };
   return { kind: "unknown" };
 }
 

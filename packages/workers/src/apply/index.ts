@@ -8,6 +8,7 @@ import { wantedAnswer, type Wanted } from "./answers.js";
 import type { ScannedField } from "./browser.js";
 
 export * from "./adapters.js";
+export * from "./essays.js";
 export * from "./fields.js";
 export { scanForm, detectBlockers } from "./browser.js";
 
@@ -20,6 +21,10 @@ export interface ApplyDeps {
   /** adapters proven in supervised real-world runs; default empty => live submit is never attempted */
   verifiedAdapters?: Set<AtsKind>;
   openPage?: (url: string) => Promise<OpenedPage>;
+  /** Draft text for a free-text question. approved=false keeps the draft for the user's review instead of filling it. */
+  draftEssay?: (q: { question: string; company: string; title: string; description: string; aiRestricted: boolean }) => Promise<{ text: string; approved: boolean } | null>;
+  /** Called when a visible CAPTCHA appears. Return true once a human has solved it. Never solved automatically. */
+  onCaptcha?: (page: Page) => Promise<boolean>;
   /** Called once the form has been filled (before any submit decision), e.g. to save a screenshot. */
   afterFill?: (page: Page, info: { filled: string[] }) => Promise<void>;
   /** Last gate before a live submit click. Return false to leave the form filled but unsubmitted. */
@@ -120,7 +125,8 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
   const opened = await (deps.openPage ?? defaultOpenPage)(adapter.formUrl(applyUrl));
   const { page } = opened;
   try {
-    const blockers = await detectBlockers(page);
+    let blockers = await detectBlockers(page);
+    if (blockers.captcha && !blockers.authWall && deps.onCaptcha && (await deps.onCaptcha(page))) blockers = await detectBlockers(page);
     if (blockers.captcha || blockers.authWall) {
       const type: ExceptionType = blockers.captcha ? "captcha" : "auth_required";
       await raise(type, `${blockers.details.join("; ")} at ${page.url()}. Complete this application manually.`);
@@ -133,6 +139,7 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     const fields = await scanForm(page);
     const filled: string[] = [], sensitive: string[] = [], missing: string[] = [];
     const answered = new Set<string>();
+    const aiRestricted = /ai policy|ai partnership|guidelines for candidates|do not use ai|without (the use of )?ai|generative ai/i.test(await pageText(page));
     for (const f of fields) {
       if (f.cls.kind === "sensitive") {
         const key = `${f.type === "radio" ? "g:" + f.name : f.selector}`;
@@ -140,6 +147,15 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
         const want = wantedAnswer(f.cls.topic, f.group || f.label, deps.profile.eligibility);
         if (want && (await answerField(page, f, want, fields).catch(() => false))) { answered.add(key); filled.push(`answered: ${f.cls.topic}`); continue; }
         if (f.required) sensitive.push(`${f.cls.topic}: "${f.group || f.label}"`);
+        continue;
+      }
+      if (f.cls.kind === "essay") {
+        if (!deps.draftEssay) { if (f.required) missing.push(f.label); continue; }
+        try {
+          const r = await deps.draftEssay({ question: f.label, company: job.normalized.company, title: job.normalized.title, description: job.normalized.description, aiRestricted });
+          if (r?.approved && r.text) { await page.locator(f.selector).fill(r.text, { timeout: 8000 }); filled.push(`essay: ${f.label.slice(0, 40)}`); }
+          else if (f.required) missing.push(`${f.label} (draft saved for your review${aiRestricted ? "; this application restricts AI-written answers, so write your own" : ""})`);
+        } catch { if (f.required) missing.push(f.label); }
         continue;
       }
       if (f.cls.kind === "unknown") { if (f.required) missing.push(f.label || f.name); continue; }

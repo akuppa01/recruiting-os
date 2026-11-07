@@ -7,18 +7,21 @@
 // no unconfirmed (highlighted) text in the resume used, and your "y" at the terminal for each application.
 // Applied is recorded only when the confirmation page text is seen. CAPTCHAs, sign-in walls and eligibility questions are never bypassed.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { AutomationPolicy, type AtsKind } from "@ros/core";
 import { SupabaseStore, createServiceClient } from "@ros/db";
-import { applyToJob } from "../../../packages/workers/src/apply/index.ts";
+import { applyToJob, detectBlockers } from "../../../packages/workers/src/apply/index.ts";
+import { draftEssayAnswer } from "../../../packages/workers/src/apply/essays.ts";
 import { setTracking } from "../src/lib/tracking";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const RESUMES = join(ROOT, "resumes/evidence/private/resume_system/01_Child_Resumes");
 const SHOTS = join(ROOT, "resumes/evidence/private/shots");
+const DRAFTS = join(ROOT, "resumes/evidence/private/drafts");
+const ABOUT = join(ROOT, "resumes/evidence/private/about_me.md");
 const MASTER = join(ROOT, "resumes/evidence/private/resume_system/01_Child_Resumes/PM_Resume.docx");
 
 // ---- args / env (secrets are read into process.env and never printed)
@@ -31,7 +34,7 @@ const VERIFIED = new Set((opt("verify") ?? "").split(",").filter(Boolean)) as Se
 if (flag("headed")) process.env.ROS_HEADED = "1";
 
 for (const line of readFileSync(join(ROOT, ".env.local"), "utf8").split("\n")) {
-  const m = line.match(/^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)=(.*)$/);
+  const m = line.match(/^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|ANTHROPIC_API_KEY)=(.*)$/);
   if (m) process.env[m[1]!] = m[2]!.trim().replace(/^["']|["']$/g, "");
 }
 
@@ -106,10 +109,32 @@ async function main() {
 
       console.log(`→ ${label} [${j.normalized.atsKind}] using ${resume.base} resume`);
       const { data: prof } = await store.sb.from("profiles").select("application_profile").eq("tenant_id", ctx.tenantId).eq("user_id", ctx.userId).maybeSingle();
-      const eligibility = (prof?.application_profile as { eligibility?: Record<string, unknown> } | null)?.eligibility;
+      const ap = (prof?.application_profile ?? {}) as { eligibility?: Record<string, unknown>; linkedin?: string };
+      const eligibility = ap.eligibility;
       mkdirSync(SHOTS, { recursive: true });
       const rep = await applyToJob(store, ctx, j.id, {
-        profile: { ...profile, eligibility: eligibility as never }, resumePdfPath: resume.pdf,
+        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin }, resumePdfPath: resume.pdf,
+        draftEssay: async (q) => {
+          mkdirSync(DRAFTS, { recursive: true });
+          const file = join(DRAFTS, `${j.id}.json`);
+          const saved: Record<string, { text: string; approved: boolean }> = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+          if (!saved[q.question]) {
+            const about = `${readFileSync(ABOUT, "utf8")}\n\n<resume>\n${text(docxXml(resume.docx))}\n</resume>`;
+            const t = await draftEssayAnswer({ ...q, about });
+            if (!t) return null;
+            // AI-restricted applications keep the draft for you to rewrite; others are used as drafted.
+            saved[q.question] = { text: t, approved: !q.aiRestricted };
+            writeFileSync(file, JSON.stringify(saved, null, 2));
+          }
+          const d = saved[q.question]!;
+          return { text: d.text, approved: d.approved && !q.aiRestricted };
+        },
+        onCaptcha: async (page) => {
+          if (!flag("headed")) return false;
+          console.log("  A CAPTCHA is showing. Solve it in the browser window (waiting up to 5 minutes)...");
+          for (let k = 0; k < 100; k++) { await page.waitForTimeout(3000); if (!(await detectBlockers(page)).captcha) return true; }
+          return false;
+        },
         afterFill: async (page) => { await page.screenshot({ path: join(SHOTS, `${j.id}.png`), fullPage: true }); }, verifiedAdapters: SUBMIT ? VERIFIED : new Set(),
         beforeSubmit: async (info) => {
           if (!confirmEach) return true;
