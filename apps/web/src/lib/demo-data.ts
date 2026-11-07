@@ -21,7 +21,11 @@ export interface ContactView {
   id: string; name: string; title: string; company: string; relevance: number; suppressed: boolean; suppressReason: string | null;
   sequence: { step: number; status: "draft" | "scheduled" | "sent" | "dry_run" | "failed" | "stopped"; when: string | null }[];
 }
-export interface ExceptionView { id: string; type: ExceptionType; detail: string; entity: string; createdAt: string; resolved: boolean }
+export interface ExceptionView {
+  id: string; type: ExceptionType; detail: string; entity: string; createdAt: string; resolved: boolean;
+  /** Set for exceptions that belong to a job; drives the Retry/Skip buttons in the Inbox. */
+  jobId?: string | null; canRetry?: boolean; canSkip?: boolean; retryBlockedReason?: string | null;
+}
 export interface ProofView { id: string; company: string; title: string; status: "draft" | "preview_ready"; previewUrl: string | null; loomScript: boolean }
 export interface UpdateView { id: string; kind: "reply" | "interview" | "rejection" | "deadline" | "system"; text: string; at: string }
 

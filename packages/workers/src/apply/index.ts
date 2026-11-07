@@ -37,6 +37,8 @@ export interface ApplyDeps {
   onCaptcha?: (page: Page) => Promise<boolean>;
   /** Called once the form has been filled (before any submit decision), e.g. to save a screenshot. */
   afterFill?: (page: Page, info: { filled: string[] }) => Promise<void>;
+  /** Called right after a live submit click and the confirmation check (e.g. to capture evidence). Never called for dry runs. */
+  afterSubmit?: (page: Page, info: { confirmed: boolean }) => Promise<void>;
   /** Last gate before a live submit click. Return false to leave the form filled but unsubmitted. */
   beforeSubmit?: (info: { company: string; title: string; url: string; filled: string[] }) => Promise<boolean>;
   /** Shared ATS form memory (selectors/labels/classification only). */
@@ -540,6 +542,7 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
     await page.waitForTimeout(250);
     const ev = detectConfirmation(adapter, page.url(), await pageText(page));
+    await deps.afterSubmit?.(page, { confirmed: !!ev }).catch(() => undefined);
     if (ev) {
       await store.updateApplication(ctx, app.id, { status: "succeeded", confirmed: true, evidence: ev, submittedAt: new Date().toISOString(), lastError: null });
       await store.setJobStage(ctx, jobId, "applied");

@@ -1,5 +1,6 @@
-import { Badge, Empty, PageHeader } from "@/components/ui";
-import { ResolveButton } from "@/components/resolve-button";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { ExceptionActions } from "@/components/exception-actions";
 import { ago, getExceptions, getUpdates } from "@/lib/data";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -14,34 +15,48 @@ export default async function Inbox() {
   const open = ex.filter((e) => !e.resolved), done = ex.filter((e) => e.resolved);
   return (
     <>
-      <PageHeader title="Notifications and exceptions" lede="Only tasks the system genuinely can't do itself land here." />
+      <AutoRefresh />
+      <PageHeader variant="apple" title="Inbox" lede="Only tasks the system genuinely can't do itself land here. Retry gives the go-ahead for another attempt; skip archives the job." />
       <section aria-labelledby="open" className="mb-8">
-        <h2 id="open" className="font-serif text-xl mb-3">Needs you</h2>
+        <h2 id="open" className="text-base font-semibold mb-3">Needs you{open.length ? ` (${open.length})` : ""}</h2>
         {open.length === 0 ? <Empty title="You're clear" action="The system will add a task here if it hits a CAPTCHA, a sign-in or a sensitive question." /> : (
-          <ul className="panel divide-y divide-mist">
+          <ul className="space-y-3">
             {open.map((e) => (
-              <li key={e.id} className="p-4 flex flex-wrap items-center gap-3">
-                <Badge tone="warn">{TYPE_LABEL[e.type]}</Badge>
-                <div className="min-w-0 flex-1"><p className="font-medium">{e.entity}</p><p className="text-sm text-soft">{e.detail}</p></div>
-                <span className="text-xs text-soft">{ago(e.createdAt)}</span>
-                <ResolveButton id={e.id} />
+              <li key={e.id}>
+                <Card className="p-4">
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <Badge tone="warn">{TYPE_LABEL[e.type] ?? "Other"}</Badge>
+                    <span className="text-xs text-soft ml-auto">{ago(e.createdAt)}</span>
+                  </div>
+                  <p className="font-medium mt-2">{e.entity}</p>
+                  <p className="text-sm text-soft mt-0.5 break-words">{e.detail}</p>
+                  <div className="mt-3">
+                    <ExceptionActions id={e.id} canRetry={!!e.canRetry} canSkip={!!e.canSkip} retryBlockedReason={e.retryBlockedReason ?? null} />
+                  </div>
+                </Card>
               </li>
             ))}
           </ul>
         )}
       </section>
       <section aria-labelledby="notif" className="mb-8">
-        <h2 id="notif" className="font-serif text-xl mb-3">Notifications</h2>
+        <h2 id="notif" className="text-base font-semibold mb-3">Notifications</h2>
         {ups.length === 0 ? <Empty title="No notifications" /> : (
-          <ul className="panel divide-y divide-mist">
-            {ups.map((u) => (<li key={u.id} className="p-4 flex gap-3 items-center"><Badge>{u.kind}</Badge><span className="text-sm">{u.text}</span><span className="ml-auto text-xs text-soft">{ago(u.at)}</span></li>))}
-          </ul>
+          <Card>
+            <ul className="divide-y divide-mist">
+              {ups.map((u) => (
+                <li key={u.id} className="p-4 flex flex-wrap gap-x-3 gap-y-1 items-center">
+                  <Badge>{u.kind}</Badge><span className="text-sm min-w-0 break-words">{u.text}</span><span className="ml-auto text-xs text-soft">{ago(u.at)}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
       </section>
       {done.length > 0 && (
         <section aria-labelledby="done">
-          <h2 id="done" className="font-serif text-xl mb-3">Resolved</h2>
-          <ul className="panel divide-y divide-mist">{done.map((e) => (<li key={e.id} className="p-4 text-sm text-soft">{e.entity}: {e.detail}</li>))}</ul>
+          <h2 id="done" className="text-base font-semibold mb-3">Resolved</h2>
+          <Card><ul className="divide-y divide-mist">{done.map((e) => (<li key={e.id} className="p-4 text-sm text-soft break-words">{e.entity}: {e.detail}</li>))}</ul></Card>
         </section>
       )}
     </>

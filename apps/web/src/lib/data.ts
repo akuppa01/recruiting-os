@@ -1,14 +1,15 @@
 // Data adapter used by every page. Demo mode (no Supabase env) serves clearly-labelled fixtures from process memory.
 // Otherwise every read is scoped to the tenant derived from the verified cookie session. No demo rows ever leak into prod.
-import type { JobStage } from "@ros/core";
+import { DEFAULT_LIMITS, type Ctx, type JobStage } from "@ros/core";
 import { SupabaseStore, hasSupabaseEnv } from "@ros/db";
 import * as demo from "./demo-data";
 import { getStore } from "./store";
 import { getSessionCtx } from "./session-ctx";
 import { readTracking } from "./tracking";
 import {
-  derivePhase, nextAction, queueDepth, sourceLabel, summarizeApplyStats, workerStatus,
-  type ApplyRecord, type ApplyStats, type PhaseOrClosed, type QueueDepth, type TaskLite,
+  derivePhase, estimateN8nExecutions, exceptionJobId, mergeLimits, nextAction, queueDepth, retryEligibility, sourceLabel, spendStatus,
+  summarizeApplyStats, summarizeBrowserRuns, summarizeRun, summarizeUsage, workerStatus,
+  type ApplyRecord, type ApplyStats, type LimitsLike, type PhaseOrClosed, type QueueDepth, type RunSummary, type TaskLite, type UsageRow, type UsageSummary,
 } from "./pipeline-view";
 export type { JobView, CompanyView, ApplicationView, ContactView, ExceptionView, ProofView, UpdateView } from "./demo-data";
 
@@ -113,12 +114,116 @@ export async function getContacts(): Promise<demo.ContactView[]> {
 export async function getExceptions(): Promise<demo.ExceptionView[]> {
   const l = await live();
   if (!l) return isDemoMode() ? demo.demoExceptions : [];
-  const [ex, jobs] = await Promise.all([l.store.listExceptions(l.ctx), l.store.searchJobs(l.ctx, { limit: 500 })]);
+  const [ex, jobs, apps] = await Promise.all([
+    l.store.listExceptions(l.ctx), l.store.searchJobs(l.ctx, { limit: 500 }),
+    rowsOf(l.sb.from("applications").select("id, job_id, status, confirmed").match(scope(l.ctx))),
+  ]);
   const name = new Map(jobs.map((j) => [j.id, j.normalized.company]));
-  return ex.map((e) => ({
-    id: e.id, type: e.type, detail: e.detail, entity: (e.entityId && name.get(e.entityId)) || e.entityType,
-    createdAt: e.createdAt, resolved: !!e.resolvedAt,
+  const jobOfApp = new Map(apps.map((a) => [String(a.id), String(a.job_id)]));
+  const appByJob = new Map(apps.map((a) => [String(a.job_id), { status: String(a.status), confirmed: !!a.confirmed }]));
+  return ex.map((e): demo.ExceptionView => {
+    const jobId = exceptionJobId(e, jobOfApp);
+    const eligibility = jobId ? retryEligibility(appByJob.get(jobId) ?? null) : null;
+    const open = !e.resolvedAt;
+    return {
+      id: e.id, type: e.type, detail: e.detail, entity: (jobId && name.get(jobId)) || (e.entityId && name.get(e.entityId)) || e.entityType,
+      createdAt: e.createdAt, resolved: !open,
+      jobId, canRetry: open && !!jobId && eligibility?.ok === true, canSkip: open && !!jobId,
+      retryBlockedReason: eligibility && !eligibility.ok ? eligibility.reason : null,
+    };
+  });
+}
+
+// ------------------------------------------------------------------ Today run summary
+export async function getRunSummary(): Promise<RunSummary> {
+  const empty = { sources: [], discoverTasks: [], applyTasks: [], apps: [], openExceptions: 0 };
+  const l = await live();
+  if (!l) return summarizeRun(empty);
+  const [sources, tasks, apps, open] = await Promise.all([
+    getSourceHealth(),
+    rowsOf(l.sb.from("tasks").select("kind, status, updated_at").match(scope(l.ctx)).in("kind", ["discover", "apply"]).order("created_at", { ascending: false }).limit(500)),
+    rowsOf(l.sb.from("applications").select("status, confirmed").match(scope(l.ctx))),
+    l.store.listExceptions(l.ctx, true),
+  ]);
+  return summarizeRun({
+    sources: sources.map((s) => ({ lastAttemptAt: s.lastAttemptAt, itemsLastRun: s.itemsLastRun })),
+    discoverTasks: tasks.filter((t) => t.kind === "discover").map((t) => ({ status: String(t.status), updatedAt: t.updated_at ?? null })),
+    applyTasks: tasks.filter((t) => t.kind === "apply").map((t) => ({ status: String(t.status) })),
+    apps: apps.map((a) => ({ status: String(a.status), confirmed: !!a.confirmed })),
+    openExceptions: open.length,
+  });
+}
+
+// ------------------------------------------------------------------ Usage and limits
+export interface SpendView { spentUsd: number; limitUsd: number; pct: number | null; level: "ok" | "warn" | "over" }
+export interface UsageView {
+  hasData: boolean;
+  summary: UsageSummary;
+  limits: LimitsLike;
+  spend: { daily: SpendView; monthly: SpendView };
+  applications: { processed: number; attempted: number; confirmed: number; unverified: number; failed: number; successRate: number | null };
+  browser: { runs: number; succeeded: number; failed: number };
+  /** n8n exposes no usage to us: this is derived from the workflow schedules and is always an estimate. */
+  n8n: { kind: "estimate"; perDay: number; perMonth: number; workflows: Array<{ name: string; runsPerDay: number }> };
+  generatedAt: string;
+}
+
+/** Supabase caps one request at 1,000 rows, so large tables are read page by page. */
+async function pagedRows(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, max = 20000): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; from < max; from += 1000) {
+    const rows = await rowsOf(page(from, from + 999));
+    out.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+/** Tenant-scoped usage readout. Takes an explicit ctx so the page (cookie session) and /api/usage (any auth) share one implementation. */
+export async function computeUsage(sb: SupabaseStore["sb"], ctx: Ctx, now: number = Date.now()): Promise<UsageView> {
+  const [usageRows, apps, applyTasks, prefs] = await Promise.all([
+    pagedRows((from, to) => sb.from("usage_events").select("metric, quantity, cost_usd, ref, created_at").match(scope(ctx)).order("created_at", { ascending: false }).range(from, to)),
+    rowsOf(sb.from("applications").select("status, confirmed").match(scope(ctx))),
+    rowsOf(sb.from("tasks").select("status").match(scope(ctx)).eq("kind", "apply").limit(5000)),
+    rowsOf(sb.from("profiles").select("preferences").match(scope(ctx)).limit(1)),
+  ]);
+  const rows: UsageRow[] = usageRows.map((r) => ({
+    metric: String(r.metric), quantity: Number(r.quantity ?? 0), costUsd: Number(r.cost_usd ?? 0),
+    ref: r.ref == null ? null : String(r.ref), createdAt: String(r.created_at),
   }));
+  const summary = summarizeUsage(rows, now);
+  const limits = mergeLimits((prefs[0]?.preferences as Row | undefined)?.limits, DEFAULT_LIMITS);
+  const stats = summarizeApplyStats(apps.map((a): ApplyRecord => ({ status: String(a.status), confirmed: !!a.confirmed, provider: null, strategy: null })));
+  const spent = (s: { measuredUsd: number; estimatedUsd: number }) => s.measuredUsd + s.estimatedUsd;
+  const spend = (spentUsd: number, limitUsd: number): SpendView => ({ spentUsd, limitUsd, ...spendStatus(spentUsd, limitUsd) });
+  return {
+    hasData: rows.length > 0 || apps.length > 0 || applyTasks.length > 0,
+    summary, limits,
+    spend: { daily: spend(spent(summary.today), limits.dailyAiUsd), monthly: spend(spent(summary.month), limits.monthlyAiUsd) },
+    applications: {
+      processed: apps.filter((a) => String(a.status) !== "pending").length, attempted: stats.attempted,
+      confirmed: stats.confirmed, unverified: stats.unverified, failed: stats.failed, successRate: stats.successRate,
+    },
+    browser: summarizeBrowserRuns(applyTasks.map((t) => ({ status: String(t.status) }))),
+    n8n: { kind: "estimate", ...estimateN8nExecutions() },
+    generatedAt: new Date(now).toISOString(),
+  };
+}
+
+/** Usage for the signed-in user. Demo mode and signed-out requests get a zeroed view (never invented numbers). */
+export async function getUsage(): Promise<UsageView> {
+  const l = await live();
+  if (!l) {
+    const summary = summarizeUsage([]);
+    const limits = { ...DEFAULT_LIMITS };
+    const zero = (limitUsd: number): SpendView => ({ spentUsd: 0, limitUsd, ...spendStatus(0, limitUsd) });
+    return {
+      hasData: false, summary, limits, spend: { daily: zero(limits.dailyAiUsd), monthly: zero(limits.monthlyAiUsd) },
+      applications: { processed: 0, attempted: 0, confirmed: 0, unverified: 0, failed: 0, successRate: null },
+      browser: { runs: 0, succeeded: 0, failed: 0 }, n8n: { kind: "estimate", ...estimateN8nExecutions() }, generatedAt: new Date().toISOString(),
+    };
+  }
+  return computeUsage(l.sb, l.ctx);
 }
 
 // No proof_assets table exists yet (tracked in TASKS.md); never fabricate rows.

@@ -10,13 +10,13 @@ export function PipelineHealth({ health }: { health: Health }) {
   const depth = queue.queued + queue.leased + queue.dead + queue.failed;
   return (
     <section aria-labelledby="health" className="mb-10">
-      <h2 id="health" className="font-serif text-xl mb-1">Pipeline health</h2>
+      <h2 id="health" className="text-base font-semibold mb-1">Pipeline health</h2>
       <p className="text-sm text-soft mb-4">Live state of job sources, workers, the task queue and application results.</p>
       {!health.hasData && (
-        <p className="panel p-4 text-sm text-soft">Nothing has run through the automated pipeline yet. Sources, workers and tasks appear here after the first run.</p>
+        <p className="rounded-2xl border border-mist bg-paper shadow-sm p-4 text-sm text-soft">Nothing has run through the automated pipeline yet. Sources, workers and tasks appear here after the first run.</p>
       )}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="panel p-4">
+        <div className="rounded-2xl border border-mist bg-paper shadow-sm p-4">
           <h3 className="font-medium mb-2">Job sources</h3>
           {sources.length === 0 ? <p className="text-sm text-soft">No source has reported yet.</p> : (
             <ul className="divide-y divide-mist">
@@ -36,7 +36,7 @@ export function PipelineHealth({ health }: { health: Health }) {
           )}
         </div>
 
-        <div className="panel p-4">
+        <div className="rounded-2xl border border-mist bg-paper shadow-sm p-4">
           <h3 className="font-medium mb-2">Workers</h3>
           {workers.length === 0 ? <p className="text-sm text-soft">No worker has checked in. Queued work waits until one starts.</p> : (
             <ul className="divide-y divide-mist">
@@ -53,7 +53,7 @@ export function PipelineHealth({ health }: { health: Health }) {
           )}
         </div>
 
-        <div className="panel p-4">
+        <div className="rounded-2xl border border-mist bg-paper shadow-sm p-4">
           <h3 className="font-medium mb-2">Task queue</h3>
           <dl className="grid grid-cols-5 gap-2 text-center">
             {([["Queued", queue.queued], ["Running", queue.leased], ["Done", queue.done], ["Failed", queue.failed], ["Dead", queue.dead]] as const).map(([k, v]) => (
@@ -63,7 +63,7 @@ export function PipelineHealth({ health }: { health: Health }) {
           <p className="text-xs text-soft mt-2">{depth === 0 ? "Nothing waiting." : `${depth} not finished.`} Dead tasks exhausted their retries and need a look.</p>
         </div>
 
-        <div className="panel p-4">
+        <div className="rounded-2xl border border-mist bg-paper shadow-sm p-4">
           <h3 className="font-medium mb-2">Application results</h3>
           {stats.attempted === 0 ? <p className="text-sm text-soft">No submission has been attempted yet. Dry runs are not counted.</p> : (
             <>

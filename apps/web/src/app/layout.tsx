@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Recruiting OS",
   description: "Your recruiting pipeline, in one place.",
   manifest: "/manifest.webmanifest",
+  icons: { apple: "/apple-touch-icon.png" },
 };
 export const viewport: Viewport = { themeColor: "#10212E", width: "device-width", initialScale: 1 };
 

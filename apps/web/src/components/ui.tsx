@@ -12,17 +12,38 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   return <span className={`inline-block text-xs px-1.5 py-0.5 border rounded-board whitespace-nowrap ${TONES[tone]}`}>{children}</span>;
 }
 
-export function PageHeader({ title, lede, right }: { title: string; lede?: string; right?: ReactNode }) {
+/** Inter first (when installed), then the system UI stack (San Francisco on Apple devices). Applied by the pages restyled for the MVP. */
+export const APPLE_FONT = "font-[family-name:Inter,Geist,ui-sans-serif,system-ui,-apple-system,Roboto,sans-serif]";
+
+export function PageHeader({ title, lede, right, variant }: { title: string; lede?: string; right?: ReactNode; variant?: "apple" }) {
+  const apple = variant === "apple";
   return (
     <header className="flex items-end justify-between gap-4 mb-6">
       <div>
-        <h1 className="page-title">{title}</h1>
+        <h1 className={apple ? "text-2xl md:text-3xl font-semibold tracking-tight" : "page-title"}>{title}</h1>
         {lede && <p className="text-soft mt-1 max-w-prose">{lede}</p>}
       </div>
       {right}
     </header>
   );
 }
+
+/** Rounded card with a soft shadow, used by the restyled pages. */
+export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`rounded-2xl border border-mist bg-paper shadow-sm ${className}`}>{children}</div>;
+}
+
+/** Thin progress bar. Blue normally, amber near a limit, red over it. */
+export function Meter({ pct, level = "ok", label }: { pct: number | null; level?: "ok" | "warn" | "over"; label: string }) {
+  const bar = level === "over" ? "bg-rust" : level === "warn" ? "bg-amber" : "bg-blue-500";
+  return (
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? 0} className="h-2 rounded-full bg-mist/60 overflow-hidden">
+      <div className={`h-2 rounded-full ${bar}`} style={{ width: `${pct ?? 0}%` }} />
+    </div>
+  );
+}
+
+export const usd = (n: number): string => `$${n < 1 ? n.toFixed(4) : n.toFixed(2)}`;
 
 export function Empty({ title, action }: { title: string; action?: ReactNode }) {
   return (

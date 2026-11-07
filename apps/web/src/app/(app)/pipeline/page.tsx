@@ -1,4 +1,5 @@
 import { Empty, PageHeader } from "@/components/ui";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { LifecycleStrip } from "@/components/lifecycle-strip";
 import { PipelineBoard, type BoardJob } from "@/components/pipeline-board";
 import { ROLE_LABEL, getJobs, getPipelineViews } from "@/lib/data";
@@ -16,7 +17,8 @@ export default async function Pipeline() {
   const counts = phaseCounts(views.length ? views.map((v) => v.phase) : all.map((j) => derivePhase({ stage: j.stage, trackingStatus: j.tracking?.status ?? null, tasks: [] })));
   return (
     <>
-      <PageHeader title="Job pipeline" lede={`${jobs.length} jobs. Tick jobs in To review or Saved, then move them to the auto-apply queue.`} />
+      <PageHeader variant="apple" title="Job pipeline" lede={`${jobs.length} jobs. Tick jobs in To review or Saved, then move them to the auto-apply queue.`} />
+      <AutoRefresh />
       <LifecycleStrip counts={counts} />
       <PipelineBoard jobs={board} />
     </>
