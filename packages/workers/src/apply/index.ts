@@ -94,7 +94,7 @@ async function answerField(page: Page, f: ScannedField, want: Wanted, all: Scann
     // Open the dropdown and click the option whose text matches; many of these dropdowns expose no option roles, so fall back to typing.
     const OPT = '[role="option"], [id*="-option-"], [class*="__option"]';
     const choose = async (): Promise<boolean> => {
-      const opts = page.locator(OPT);
+      const opts = page.locator(`${OPT} >> visible=true`); // only the open menu: hidden lists (e.g. phone country codes) are ignored
       const n = await opts.count();
       for (let i = 0; i < n; i++) {
         const t = (await opts.nth(i).innerText()).trim();
@@ -109,7 +109,7 @@ async function answerField(page: Page, f: ScannedField, want: Wanted, all: Scann
       await loc.fill(want.text); // typeahead lists (e.g. School) only show matches after typing
       await page.waitForTimeout(700);
       if (await choose()) return true;
-      if ((await page.locator(OPT).count()) === 0) {
+      if ((await page.locator(`${OPT} >> visible=true`).count()) === 0) {
         // Options not detectable: Enter picks the first filtered match. Confirm the control now shows the chosen text.
         await page.keyboard.press("Enter");
         await page.waitForTimeout(300);
@@ -219,6 +219,15 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
           if (r?.approved && r.text) { await page.locator(f.selector).fill(r.text, { timeout: 8000 }); filled.push(`essay: ${f.label.slice(0, 40)}`); }
           else if (f.required) missing.push(`${f.label} (draft saved for your review${aiRestricted ? "; this application restricts AI-written answers, so write your own" : ""})`);
         } catch { if (f.required) missing.push(f.label); }
+        continue;
+      }
+      if (f.cls.kind === "unknown" && f.type === "file") {
+        // Unlabeled file inputs (e.g. transcripts): attach a saved file when a rule matches the surrounding text.
+        const fr = (deps.profile.answers ?? []).find((r) => r.file && new RegExp(r.match, "i").test(f.ctx || f.label));
+        if (fr?.file) {
+          try { await page.locator(f.selector).setInputFiles(fr.file, { timeout: 10000 }); filled.push(`attached: ${fr.text}`); }
+          catch { if (f.required) missing.push(fr.text); }
+        }
         continue;
       }
       if (f.cls.kind === "unknown") {

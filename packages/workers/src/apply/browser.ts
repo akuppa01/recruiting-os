@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import { classifyField, type FieldClass } from "./fields.js";
 
 export interface ScannedField {
-  index: number; selector: string; tag: string; type: string; name: string; label: string; group: string; options: string[]; combo: boolean; required: boolean; cls: FieldClass;
+  index: number; selector: string; tag: string; type: string; name: string; label: string; group: string; options: string[]; combo: boolean; ctx: string; required: boolean; cls: FieldClass;
 }
 
 /** Inspect visible form controls. Selectors are positional data-ros-idx attributes we stamp on the element. */
@@ -29,8 +29,18 @@ export async function scanForm(page: Page): Promise<ScannedField[]> {
         : "";
       const options = el.tagName === "SELECT" ? Array.from((el as unknown as HTMLSelectElement).options).map((o) => o.text.trim()) : [];
       const combo = el.getAttribute("role") === "combobox" || el.getAttribute("aria-haspopup") === "listbox";
+      // For unlabeled file inputs, the question text lives in the smallest wrapper that contains only this one file input.
+      let ctx = "";
+      if (type === "file") {
+        let n: HTMLElement | null = el.parentElement;
+        let best: HTMLElement | null = null;
+        for (let k = 0; k < 8 && n; k++, n = n.parentElement) {
+          if (n.querySelectorAll("input[type=file]").length === 1) best = n; else break;
+        }
+        ctx = (best?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+      }
       out.push({ index: i, tag: el.tagName.toLowerCase(), type, name: el.getAttribute("name") ?? el.id ?? "", label: lab.replace(/\s+/g, " ").replace(/\*/g, "").trim(),
-        group: group.replace(/\s+/g, " ").replace(/\*/g, "").trim(), options, combo, required: required || (isChoice && /\*\s*$/.test(group.trim())) });
+        group: group.replace(/\s+/g, " ").replace(/\*/g, "").trim(), options, combo, ctx, required: required || (isChoice && /\*\s*$/.test(group.trim())) });
     });
     return out;
   });

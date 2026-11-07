@@ -84,7 +84,7 @@ async function main() {
   const queue = (data ?? []) as Array<{ id: string; tenant_id: string; user_id: string; stage: string; normalized: Record<string, any> }>;
   console.log(`${queue.length} job(s) in the auto-apply queue.`);
 
-  let confirmEach = true;
+  let confirmEach = !flag("yes-all");
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let done = 0;
   try {
