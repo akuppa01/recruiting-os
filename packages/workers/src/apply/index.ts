@@ -463,6 +463,14 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
       if (pageNo === 1) {
         if (raw.length === 0) {
           await deps.afterSubmit?.(page).catch(() => undefined); // diagnostics: the unfilled public job page (no personal data on it)
+          const wall = (await pageText(page).catch(() => "")).toLowerCase();
+          if (/access denied|performing security verification|verify you are human|just a moment|attention required|are you a robot/.test(wall)) {
+            // The company's careers site is blocking automated visitors. Never evaded: reported so the user can apply by hand (or from their own computer).
+            await raise("platform_restricts_automation", `The company's careers page blocks automated visitors (${new URL(page.url()).host}). Apply manually from the job link.`);
+            await store.updateApplication(ctx, app.id, { status: "failed", lastError: "bot_protection" });
+            await store.setJobStage(ctx, jobId, "needs_human");
+            return finish("blocked", mk("failed", false, { type: "platform_restricts_automation", detail: "careers page blocks automated visitors" }), []);
+          }
           await raise("other", `No application form was found at ${page.url()}. Apply manually from the job page.`);
           await store.updateApplication(ctx, app.id, { status: "failed", lastError: "no_form_found" });
           await store.setJobStage(ctx, jobId, "needs_human");
