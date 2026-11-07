@@ -115,7 +115,8 @@ async function main() {
 
       // ---- Phase B: enqueue apply tasks (policy, score threshold, ATS support, daily cap, deadline priority)
       const countAppsToday = async (c: Ctx, since: Date) => {
-        const r = await sb.from("applications").select("id", { count: "exact", head: true }).eq("tenant_id", c.tenantId).eq("user_id", c.userId).gte("created_at", since.toISOString());
+        // Only applications actually sent to an employer count toward the daily cap (dry runs and failures do not).
+        const r = await sb.from("applications").select("id", { count: "exact", head: true }).eq("tenant_id", c.tenantId).eq("user_id", c.userId).in("status", ["succeeded", "unverified"]).gte("created_at", since.toISOString());
         if (r.error) throw new Error(`applications count: ${r.error.message}`);
         return r.count ?? 0;
       };
