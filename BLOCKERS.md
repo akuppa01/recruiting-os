@@ -19,3 +19,6 @@
 | B-011 | Apply/discover handlers not wired to the durable queue | Lead: finish wiring in `apps/web/scripts/worker.ts` | OPEN |
 | B-012 | Pinterest dropdowns (availability, degree status, office location) not fillable by the worker | Needs their option text; worker now reports options in the exception | OPEN |
 | B-013 | Databricks submission unverified | User: check Tepper/business inbox for a Databricks confirmation email | OPEN |
+| B-014 | 12twenty job links are click-tracking redirects; the cloud worker cannot find the real ATS URL, so email jobs are listed for review but not auto-applied | Mac worker or a redirect-resolving step on a residential IP; or user applies from the dashboard link | OPEN |
+| B-015 | Rubrik (Akamai) and Pinterest (Cloudflare) block datacenter IPs | Run those on the Mac worker (residential IP) or apply by hand; not evaded | OPEN |
+| B-016 | Gmail credential account unconfirmed (akuppa@ vs ekuppa@tepper.cmu.edu) | User: confirm which address n8n is signed into | OPEN |

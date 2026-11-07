@@ -26,3 +26,12 @@ Only results actually observed. Last updated: 2026-11-07.
 - Greenhouse dry runs filled name, email, phone, resume, LinkedIn, eligibility, education and EEO fields on Anthropic, Databricks and Pinterest.
 - Databricks live submit: submit clicked, confirmation not detected, left as unverified (user to check email).
 - Pinterest: three dropdowns (availability, degree status, office location) could not be filled by the worker; not submitted.
+
+## 2026-11-07 — cloud dry run with real alert emails (executed, not assumed)
+- n8n workflow `Recruiting OS: alert emails -> backend` (Gmail -> batch -> POST /api/internal/gmail-sync): manual execution succeeded; 51 emails (40 from 12twenty, 9 Handshake, 2 LinkedIn) became 51 `discover` tasks. Workflow is now published (every 3 hours).
+- GitHub Actions cloud worker (dry run, no Mac): discovery 127 found / 98 new / 0 failed; 140 jobs in Supabase (36 scored for review, 6 qualified, 81 archived by rules); 84 carry deadlines.
+- Bug found and fixed by this run: unresolved 12twenty tracking links all canonicalized to one URL and collapsed ~100 jobs into one (30 found instead of 127). Regression test: `packages/workers/test/discovery/tracking-links.test.ts`.
+- Parser on the real stored emails: 99 distinct 12twenty jobs + 20 Handshake round-up jobs; discovery tests 52/52 plus 13 in the health/run + tracking suites.
+- Bot-protected careers pages (Rubrik: Akamai "Access Denied"; Pinterest: Cloudflare Turnstile) are reported as `platform_restricts_automation`; never bypassed.
+- Live app after build 33d70c4: manifest, service worker and 3 PNG icons return 200 without login; /api/* is 401 without the secret.
+- NOT tested: a confirmed live submission with evidence (Databricks is unverified); dashboard visual check at phone width (needs the user's Google sign-in); Lever/Ashby live submit.
