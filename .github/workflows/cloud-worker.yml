@@ -1,7 +1,7 @@
 name: cloud-worker
 
 # Unattended discovery + application worker. Independent of any personal computer.
-# Scheduled runs follow the saved automation policy; manual runs default to a DRY RUN unless dry_run is switched off.
+# Scheduled runs are DRY RUNS (nothing is submitted) unless the repository variable CLOUD_LIVE is set to 'true'; manual runs default to a DRY RUN unless dry_run is switched off.
 on:
   schedule:
     - cron: "15 12 * * *"        # daily, 12:15 UTC
@@ -53,7 +53,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           ROS_APP_URL: https://recruiting-os-tau.vercel.app
-          DRY: ${{ github.event_name == 'schedule' && 'false' || (inputs.dry_run && 'true' || 'false') }}
+          DRY: ${{ github.event_name == 'schedule' && (vars.CLOUD_LIVE == 'true' && 'false' || 'true') || (inputs.dry_run && 'true' || 'false') }}
           TEST_NOTIFICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.test_notification && 'true' || 'false' }}
         run: |
           if [ "$TEST_NOTIFICATION" = "true" ]; then
