@@ -64,9 +64,13 @@ const NEXT_SELECTORS = ["button:has-text('Next')", "button:has-text('Continue')"
 
 /** Company career pages often embed the ATS form in an iframe. Scanning only sees the top document, so open the embedded form directly. */
 async function hopToEmbeddedForm(page: Page): Promise<void> {
+  // Match the iframe's actual HOST: other frames (e.g. Google API helpers) can carry "greenhouse.io" in their URL parameters.
   const findSrc = () => page.evaluate(() => {
-    const f = Array.from(document.querySelectorAll("iframe")).find((i) => /greenhouse\.io|lever\.co|ashbyhq\.com/.test(i.src));
-    return f ? f.src : null;
+    const re = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com)$/i;
+    for (const i of Array.from(document.querySelectorAll("iframe"))) {
+      try { if (re.test(new URL(i.src).hostname)) return i.src; } catch { /* ignore frames without a valid src */ }
+    }
+    return null;
   });
   let src = await findSrc();
   if (!src) {
@@ -74,8 +78,20 @@ async function hopToEmbeddedForm(page: Page): Promise<void> {
     const inputs = await page.evaluate(() => document.querySelectorAll("input:not([type=hidden]):not([type=search]), textarea, select").length);
     const hasPassword = await page.evaluate(() => !!document.querySelector("input[type=password]"));
     if (inputs >= 3 || hasPassword) return; // a sign-in wall has nothing to wait for
-    await page.waitForSelector("iframe[src*='greenhouse'], iframe[src*='lever.co'], iframe[src*='ashbyhq']", { timeout: 8000 }).catch(() => undefined);
+    await page.waitForSelector("iframe[src*='boards.greenhouse.io'], iframe[src*='job-boards.greenhouse.io'], iframe[src*='jobs.lever.co'], iframe[src*='jobs.ashbyhq.com']", { timeout: 15000 }).catch(() => undefined);
     src = await findSrc();
+  }
+  if (!src) {
+    // Fallback for Greenhouse career pages whose embed has not rendered: build the hosted form address from the page's own embed settings.
+    const jid = new URL(page.url()).searchParams.get("gh_jid");
+    const board = await page.evaluate(() => {
+      for (const s of Array.from(document.querySelectorAll("script[src]"))) {
+        const u = (s as HTMLScriptElement).src;
+        if (/greenhouse\.io\/embed\/job_board\/js/.test(u)) { try { return new URL(u).searchParams.get("for"); } catch { /* ignore */ } }
+      }
+      return null;
+    });
+    if (jid && board && /^[a-z0-9_-]+$/i.test(board)) src = `https://job-boards.greenhouse.io/embed/job_app?for=${board}&token=${jid}`;
   }
   if (!src) return;
   await page.goto(src, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -446,6 +462,7 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
       const sig = formSignature(raw);
       if (pageNo === 1) {
         if (raw.length === 0) {
+          await deps.afterSubmit?.(page).catch(() => undefined); // diagnostics: the unfilled public job page (no personal data on it)
           await raise("other", `No application form was found at ${page.url()}. Apply manually from the job page.`);
           await store.updateApplication(ctx, app.id, { status: "failed", lastError: "no_form_found" });
           await store.setJobStage(ctx, jobId, "needs_human");
