@@ -109,11 +109,11 @@ async function main() {
 
       console.log(`→ ${label} [${j.normalized.atsKind}] using ${resume.base} resume`);
       const { data: prof } = await store.sb.from("profiles").select("application_profile").eq("tenant_id", ctx.tenantId).eq("user_id", ctx.userId).maybeSingle();
-      const ap = (prof?.application_profile ?? {}) as { eligibility?: Record<string, unknown>; linkedin?: string };
+      const ap = (prof?.application_profile ?? {}) as { eligibility?: Record<string, unknown>; linkedin?: string; answers?: Array<{ match: string; text: string; pick?: string }> };
       const eligibility = ap.eligibility;
       mkdirSync(SHOTS, { recursive: true });
       const rep = await applyToJob(store, ctx, j.id, {
-        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin }, resumePdfPath: resume.pdf, keepOpen: flag("keep-open"),
+        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin, answers: ap.answers }, resumePdfPath: resume.pdf, keepOpen: flag("keep-open"),
         draftEssay: async (q) => {
           mkdirSync(DRAFTS, { recursive: true });
           const file = join(DRAFTS, `${j.id}.json`);

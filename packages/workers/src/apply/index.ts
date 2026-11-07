@@ -53,6 +53,8 @@ async function hopToEmbeddedForm(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const launched: Array<{ isConnected(): boolean }> = [];
 /** Resolves once every browser window opened by defaultOpenPage has been closed (used to keep filled forms open for the user). */
 export async function waitForBrowsersClosed(): Promise<void> {
@@ -84,22 +86,39 @@ async function answerField(page: Page, f: ScannedField, want: Wanted, all: Scann
     if (!mate) return false;
     await page.locator(mate.selector).check({ force: true }); return true;
   }
-  if (f.type === "checkbox") return false;
+  if (f.type === "checkbox") {
+    if (!want.pick.test(f.label)) return false;
+    await loc.check({ force: true, timeout: 5000 }); return true;
+  }
   if (f.combo) {
-    // Open the dropdown and click the option whose text matches (typing could match "Female" for "Male").
-    try {
-      await loc.click({ timeout: 5000 });
-      const opts = page.locator('[role="option"]');
-      await opts.first().waitFor({ state: "visible", timeout: 4000 });
+    // Open the dropdown and click the option whose text matches; many of these dropdowns expose no option roles, so fall back to typing.
+    const OPT = '[role="option"], [id*="-option-"], [class*="__option"]';
+    const choose = async (): Promise<boolean> => {
+      const opts = page.locator(OPT);
       const n = await opts.count();
       for (let i = 0; i < n; i++) {
         const t = (await opts.nth(i).innerText()).trim();
         if (want.pick.test(t)) { await opts.nth(i).click(); return true; }
       }
-      await page.keyboard.press("Escape");
       return false;
-    } catch { /* not a role=option dropdown: fall back to typing */ }
-    await loc.fill(want.text); await page.waitForTimeout(400); await page.keyboard.press("Enter"); return true;
+    };
+    try {
+      await loc.click({ timeout: 5000 });
+      await page.waitForTimeout(500);
+      if (await choose()) return true;
+      await loc.fill(want.text); // typeahead lists (e.g. School) only show matches after typing
+      await page.waitForTimeout(700);
+      if (await choose()) return true;
+      if ((await page.locator(OPT).count()) === 0) {
+        // Options not detectable: Enter picks the first filtered match. Confirm the control now shows the chosen text.
+        await page.keyboard.press("Enter");
+        await page.waitForTimeout(300);
+        const shown = await loc.evaluate((el) => (el.closest("[class*='container'], [class*='select']") as HTMLElement | null)?.innerText ?? "");
+        if (shown.toLowerCase().includes(want.text.toLowerCase().slice(0, 6)) && !/no options/i.test(shown)) return true;
+      }
+    } catch { /* could not operate this dropdown */ }
+    await page.keyboard.press("Escape").catch(() => undefined);
+    return false;
   }
   await loc.fill(want.text); return true;
 }
@@ -172,6 +191,9 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     }
     const filled: string[] = [], sensitive: string[] = [], missing: string[] = [];
     const answered = new Set<string>();
+    const deferred: Array<{ f: ScannedField; rule: { match: string; text: string; pick?: string } }> = [];
+    const boxes: ScannedField[] = [];
+    const answeredBoxGroups = new Set<string>();
     const aiRestricted = /ai policy|ai partnership|guidelines for candidates|do not use ai|without (the use of )?ai|generative ai/i.test(await pageText(page));
     for (const f of fields) {
       if (f.cls.kind === "sensitive") {
@@ -199,7 +221,14 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
         } catch { if (f.required) missing.push(f.label); }
         continue;
       }
-      if (f.cls.kind === "unknown") { if (f.required) missing.push(f.label || f.name); continue; }
+      if (f.cls.kind === "unknown") {
+        const q = f.group || f.label;
+        const rule = (deps.profile.answers ?? []).find((r) => new RegExp(r.match, "i").test(q) || (f.type === "checkbox" && new RegExp(r.match, "i").test(f.label)));
+        if (rule) { deferred.push({ f, rule }); continue; } // saved-answer rules run after the core answers so dropdowns don't interfere
+        if (f.type === "checkbox") { boxes.push(f); continue; } // required-ness is per group: decided after the saved answers ran
+        if (f.required) missing.push(f.label || f.name);
+        continue;
+      }
       const loc = page.locator(f.selector);
       try {
         if (f.cls.key === "resume") { await loc.setInputFiles(deps.resumePdfPath, { timeout: 10000 }); filled.push("resume"); continue; }
@@ -210,6 +239,19 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
       } catch {
         if (f.required) missing.push(`${f.cls.key} (could not fill "${f.label}")`);
       }
+    }
+    for (const { f, rule } of deferred) {
+      const q = f.group || f.label;
+      const key = f.type === "radio" || f.type === "checkbox" ? `g:${q}` : f.selector;
+      const want: Wanted = { text: rule.text, pick: new RegExp(rule.pick ?? escapeRe(rule.text), "i") };
+      const ok = await answerField(page, f, want, fields).catch(() => false);
+      if (ok) { answered.add(key); if (f.type === "checkbox") answeredBoxGroups.add(f.name); filled.push(`answered: ${q.slice(0, 40)}`); continue; }
+      if (f.type === "checkbox") { boxes.push(f); continue; }
+      if (f.required) missing.push(f.label || f.name);
+    }
+    for (const f of boxes) {
+      if (answeredBoxGroups.has(f.name)) continue; // another box in this group was chosen by a saved answer; leave the rest unchecked
+      if (f.required) missing.push(f.group || f.label);
     }
     // Some questions only appear after another is answered (e.g. race after Hispanic/Latino): scan once more for those.
     if (answered.size) {
