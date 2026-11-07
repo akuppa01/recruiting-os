@@ -42,7 +42,7 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
             ))}
           </ul>
         )}
-        <aside aria-label="Job detail" className="panel p-5 lg:sticky lg:top-6">
+        <aside aria-label="Job detail" className={`panel p-5 lg:sticky lg:top-6 lg:order-none ${sel ? "order-first" : ""}`}>
           {!sel ? <p className="text-soft text-sm">Select a job to see how it scored.</p> : (
             <>
               <h2 className="font-serif text-xl">{sel.title}</h2>
