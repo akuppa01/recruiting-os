@@ -22,12 +22,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {userEmail && (
           <div className="px-6 pt-4 pb-6 mt-auto border-t border-mist">
             <p className="text-xs text-gray-500 truncate mb-2">{userEmail}</p>
-            <Link
-              href="/auth/logout"
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Sign out
-            </Link>
+            <form action="/auth/logout" method="POST">
+              <button
+                type="submit"
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         )}
       </aside>

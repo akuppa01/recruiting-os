@@ -41,18 +41,7 @@ export async function middleware(request: NextRequest) {
   // Refresh the session — MUST call getUser(), not getSession(), for security.
   const {
     data: { user },
-    error: getUserError,
   } = await supabase.auth.getUser();
-
-  if (getUserError) {
-    console.error("[middleware] getUser error:", getUserError.message);
-  }
-  console.log(
-    "[middleware]",
-    request.nextUrl.pathname,
-    "user:", user?.id ?? "null",
-    "cookies:", request.cookies.getAll().map((c) => c.name).join(",")
-  );
 
   const { pathname } = request.nextUrl;
 
