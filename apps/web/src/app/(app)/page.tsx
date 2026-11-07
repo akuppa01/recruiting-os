@@ -26,7 +26,7 @@ export default async function CommandCenter() {
       {/* Mobile-first order: things needing you, replies, quick add, then the board. */}
       <section aria-labelledby="prio" className="mb-8 order-1">
         <h2 id="prio" className="font-serif text-xl mb-3">Priorities for today</h2>
-        <p className="text-sm text-soft mb-3">Saved {counts("saved")} · Applied {counts("applied")} · Interviewing {counts("interviewing")} · Offer {counts("offer")} · Rejected {counts("rejected")}</p>
+        <p className="text-sm text-soft mb-3">Saved {counts("saved")} · Queued {counts("queued")} · Applied {counts("applied")} · Ready to contact {counts("ready_to_contact")} · Interviewing {counts("interviewing")} · Offer {counts("offer")} · Rejected {counts("rejected")}</p>
         {followUps.length + saved.length + closing.length + toReview.length === 0 ? (
           <p className="text-soft">Nothing queued. Use Find jobs or Add a job below.</p>
         ) : (

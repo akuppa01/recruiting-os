@@ -2,13 +2,13 @@
 import type { Ctx, JobStage, Store } from "@ros/core";
 import { SupabaseStore } from "@ros/db";
 
-export const TRACK_STATUSES = ["saved", "applied", "interviewing", "rejected", "offer"] as const;
+export const TRACK_STATUSES = ["saved", "queued", "applied", "ready_to_contact", "interviewing", "rejected", "offer"] as const;
 export type TrackStatus = (typeof TRACK_STATUSES)[number];
 
 export interface Tracking { status: TrackStatus | null; notes: string; followUpAt: string | null; appliedAt: string | null }
 export const EMPTY_TRACKING: Tracking = { status: null, notes: "", followUpAt: null, appliedAt: null };
 
-const STAGE_FOR: Partial<Record<TrackStatus, JobStage>> = { applied: "applied", interviewing: "interviewing", offer: "offer", rejected: "rejected" };
+const STAGE_FOR: Partial<Record<TrackStatus, JobStage>> = { queued: "applying", applied: "applied", ready_to_contact: "applied", interviewing: "interviewing", offer: "offer", rejected: "rejected" };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function readTracking(normalized: unknown): Tracking {
@@ -31,14 +31,17 @@ export async function setTracking(
   if (!job) return null;
 
   const cur = readTracking(job.normalized);
+  let status = patch.status !== undefined ? patch.status : cur.status;
+  // Queued jobs that reach Applied move straight on to "ready to contact".
+  if (patch.status === "applied" && cur.status === "queued") status = "ready_to_contact";
   const next: Tracking = {
-    status: patch.status !== undefined ? patch.status : cur.status,
+    status,
     notes: patch.notes !== undefined ? patch.notes : cur.notes,
     followUpAt: patch.followUpAt !== undefined ? patch.followUpAt : cur.followUpAt,
     appliedAt: cur.appliedAt,
   };
-  const becameApplied = next.status === "applied" && cur.status !== "applied";
-  if (becameApplied && !next.appliedAt) next.appliedAt = new Date().toISOString();
+  const becameApplied = (status === "applied" || status === "ready_to_contact") && !cur.appliedAt;
+  if (becameApplied) next.appliedAt = new Date().toISOString();
 
   const { error } = await store.sb.from("jobs")
     .update({ normalized: { ...(job.normalized as object), tracking: next } })
@@ -55,7 +58,7 @@ export async function setTracking(
       evidence: { kind: "user_attested", detail: "Marked as applied by you" },
     });
   }
-  if (patch.status !== undefined && patch.status !== cur.status)
+  if (next.status !== cur.status)
     await store.logEvent(ctx, "job.tracking_status", "job", jobId, { from: cur.status, to: next.status });
   return next;
 }

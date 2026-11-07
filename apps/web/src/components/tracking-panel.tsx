@@ -3,7 +3,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const STATUSES = [
-  { id: "saved", label: "Saved" }, { id: "applied", label: "Applied" }, { id: "interviewing", label: "Interviewing" },
+  { id: "saved", label: "Saved" }, { id: "queued", label: "Auto-apply queue" }, { id: "applied", label: "Applied" },
+  { id: "ready_to_contact", label: "Ready to contact" }, { id: "interviewing", label: "Interviewing" },
   { id: "offer", label: "Offer" }, { id: "rejected", label: "Rejected" },
 ] as const;
 
