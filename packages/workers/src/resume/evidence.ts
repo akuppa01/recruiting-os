@@ -8,7 +8,7 @@ export const CandidateProfile = z.object({
   location: z.string().optional(), education: z.array(z.string()).default([]),
   // application-form data (repetitive fields)
   website: z.string().optional(), workAuthorization: z.string().optional(), pronouns: z.string().optional(),
-  eligibility: z.object({ usCitizen: z.boolean().optional(), authorizedToWorkUS: z.boolean().optional(), requiresSponsorship: z.boolean().optional(), veteran: z.boolean().optional(), disability: z.boolean().optional(), gender: z.enum(["male", "female"]).optional(), race: z.enum(["asian"]).optional(), hispanicLatino: z.boolean().optional() }).optional(),
+  eligibility: z.object({ usCitizen: z.boolean().optional(), authorizedToWorkUS: z.boolean().optional(), requiresSponsorship: z.boolean().optional(), veteran: z.boolean().optional(), disability: z.boolean().optional(), gender: z.enum(["male", "female"]).optional(), race: z.enum(["asian"]).optional(), hispanicLatino: z.boolean().optional(), previouslyInterviewed: z.boolean().optional() }).optional(),
 });
 export type CandidateProfile = z.infer<typeof CandidateProfile>;
 

@@ -149,6 +149,14 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
         if (f.required) sensitive.push(`${f.cls.topic}: "${f.group || f.label}"`);
         continue;
       }
+      if (f.cls.kind === "ack") {
+        try {
+          if (f.type === "checkbox") await page.locator(f.selector).check({ force: true, timeout: 5000 });
+          else if (!(await answerField(page, f, { text: "Yes", pick: /^\s*(yes|i (acknowledge|confirm|agree|understand))\b/i }, fields))) throw new Error("no matching option");
+          filled.push(`acknowledged: ${(f.group || f.label).slice(0, 40)}`);
+        } catch { if (f.required) missing.push(f.group || f.label); }
+        continue;
+      }
       if (f.cls.kind === "essay") {
         if (!deps.draftEssay) { if (f.required) missing.push(f.label); continue; }
         try {

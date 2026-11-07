@@ -23,7 +23,7 @@ export function DiscoverButton() {
   return (
     <div className="panel p-4">
       <p className="font-serif text-lg mb-1">Find jobs</p>
-      <p className="text-sm text-soft mb-3">Scans public company job boards for GTM, growth strategy, product marketing, business strategy and partnerships roles in Remote, Texas, New York and California.</p>
+      <p className="text-sm text-soft mb-3">Scans public company job boards for Summer 2027 internships and fellowships in product management, GTM, strategy, product marketing, partnerships and business operations (Remote, TX, NY, CA, FL).</p>
       <div className="flex items-center gap-3">
         <button type="button" className="btn" onClick={run} disabled={busy}>{busy ? "Searching (up to a minute)…" : "Find jobs now"}</button>
         <p role="status" className="text-sm">{res}</p>

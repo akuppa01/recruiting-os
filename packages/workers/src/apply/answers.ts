@@ -2,7 +2,7 @@
 // an unset value (or any topic not listed here) returns null and the question goes to the user as an exception.
 export interface Eligibility {
   usCitizen?: boolean; authorizedToWorkUS?: boolean; requiresSponsorship?: boolean; veteran?: boolean; disability?: boolean;
-  gender?: "male" | "female"; race?: "asian"; hispanicLatino?: boolean;
+  gender?: "male" | "female"; race?: "asian"; hispanicLatino?: boolean; previouslyInterviewed?: boolean;
 }
 export interface Wanted { text: string; pick: RegExp }
 
@@ -16,6 +16,7 @@ export function wantedAnswer(topic: string, question: string, e?: Eligibility): 
     if (/citizen/.test(q) && !/authori[sz]|legally|right to work/.test(q)) return e.usCitizen === undefined ? null : yesNo(e.usCitizen);
     return e.authorizedToWorkUS === undefined ? null : yesNo(e.authorizedToWorkUS);
   }
+  if (topic === "prior interview") return e.previouslyInterviewed === undefined ? null : yesNo(e.previouslyInterviewed);
   if (topic === "veteran status" && e.veteran === false)
     return { text: "I am not a protected veteran", pick: /not a (protected )?veteran|am not a|^\s*no\b/i };
   if (topic === "disability" && e.disability === false)

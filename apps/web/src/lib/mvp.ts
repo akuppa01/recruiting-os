@@ -7,20 +7,27 @@ import { BOARDS } from "./discover-config";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// ------------------------------------------------------------------ relevance filters (post-MBA GTM / strategy / PMM / partnerships)
-const ROLE_PRIMARY = /(gtm strategy|go[- ]to[- ]market strategy|growth strategy|business strategy|corporate strategy|strategic partnerships?|product marketing|strategy (manager|lead|partner))/i;
-const ROLE_ANY = /(gtm|go[- ]to[- ]market|growth strategy|business strategy|corporate strategy|strategy\s*(&|and)\s*(operations|ops|planning)|strategy (manager|lead|associate|partner)|strategic (partnerships?|initiatives)|partnerships? (manager|lead|strategy)|product marketing|bizops|business operations|chief of staff|revenue strategy|sales strategy)/i;
-const TITLE_EXCLUDE = /(\bintern\b|internship|recruit|hrbp|account executive|accountant|fp&a|strategic finance|finance (analyst|manager)|engineer|developer|designer|counsel|legal|\bsdr\b|\bbdr\b|sales development|customer success|support|payroll|compensation|data analyst|\bvp\b|vice president|\bsvp\b|\bevp\b|head of|director|principal|\bstaff\b)/i;
-const US_HIT = /(texas|\btx\b|austin|dallas|houston|san antonio|new york|\bnyc\b|\bny\b|california|\bca\b|san francisco|\bsf\b|bay area|los angeles|san jose|san mateo|palo alto|mountain view|oakland|san diego|united states|\busa\b|\bus\b|\bamer\b|north america)/i;
+// ------------------------------------------------------------------ relevance filters: Summer 2027 internships and fellowships (PM, GTM, strategy, PMM, partnerships, bizops, growth)
+const INTERN = /\b(intern|interns|internship|fellow|fellowship|co-?op|summer associate)\b/i;
+const ROLE_PRIMARY = /(product (management|manager)|\bapm\b|go[- ]to[- ]market|\bgtm\b|growth strategy|business strategy|corporate strategy|strateg(y|ic) (&|and )?(operations|partnerships?)|strategic partnerships?|product marketing|strategy)/i;
+const ROLE_ANY = /(product (management|manager)|\bpm\b|\bapm\b|product marketing|go[- ]to[- ]market|\bgtm\b|growth|strateg|business (operations|analyst|development)|bizops|partnership|founder|chief of staff|\bmba\b|revenue|operations|marketing|program)/i;
+const TITLE_EXCLUDE = /\b(engineer|engineering|developer|designer|design|counsel|legal|recruit|scientist|research|researcher|machine learning|software|data science|security|infrastructure|hardware|firmware|accountant|technical|ux|ui)\b/i;
+const US_HIT = /(texas|\btx\b|austin|dallas|houston|san antonio|new york|\bnyc\b|\bny\b|california|\bca\b|san francisco|\bsf\b|bay area|los angeles|san jose|san mateo|palo alto|mountain view|menlo park|oakland|san diego|miami|florida|\bfl\b|united states|\busa\b|\bus\b|\bamer\b|north america)/i;
 const REMOTE_HIT = /remote/i;
 const FOREIGN_HIT = /(ireland|united kingdom|\buk\b|emea|canada|netherlands|germany|france|india|apac|australia|singapore|japan|brazil|mexico|europe|london|toronto|dublin|berlin|paris)/i;
 const TECH_WORDS = ["api", "apis", "developer", "developers", "platform", "saas", "ai", "machine learning", "llm", "data", "cloud", "infrastructure", "devtools", "technical", "sdk", "b2b", "engineering"];
 
-export const titleMatches = (t: string) => ROLE_ANY.test(t) && !TITLE_EXCLUDE.test(t);
+export const titleMatches = (t: string) => INTERN.test(t) && ROLE_ANY.test(t) && !TITLE_EXCLUDE.test(t);
 export const locationOk = (loc: string | null | undefined) => {
   const l = loc ?? "";
   return US_HIT.test(l) || (REMOTE_HIT.test(l) && !FOREIGN_HIT.test(l));
 };
+/** Summer 2027 only: rejects postings that name a different season/year and never mention Summer 2027. */
+export function seasonOk(text: string): boolean {
+  if (/summer\s*(of\s*)?2027|2027\s*summer|summer\s*'27/i.test(text)) return true;
+  const other = /(winter|fall|autumn|spring)\s*(of\s*)?20\d\d|summer\s*(of\s*)?20(2[0-6]|2[89])|\b20(25|26|28)\s*(summer|intern)/i.test(text);
+  return !other;
+}
 
 /** Transparent heuristic: only role fit, location and technical-advantage signals are assessed. Never invents comp/size/conversion. */
 export function fitScore(n: NormalizedJob, manual: boolean): ScoreBreakdown {
@@ -30,12 +37,15 @@ export function fitScore(n: NormalizedJob, manual: boolean): ScoreBreakdown {
   const flexibility = locOk ? 100 : 40;
   const hay = `${title}\n${n.description}`.toLowerCase();
   const hits = TECH_WORDS.filter((w) => new RegExp(`\\b${w.replace(/ /g, "\\s+")}\\b`).test(hay));
-  const upside = n.description ? Math.min(100, hits.length * 20 + (/(technical|developer|platform|\bai\b|api)/i.test(title) ? 20 : 0)) : 0;
-  const total = Math.max(0, Math.min(100, Math.round(0.5 * roleFit + 0.2 * flexibility + 0.3 * upside)));
+  const upside = n.description ? Math.min(100, hits.length * 12 + (/(technical|developer|platform|\bai\b|api)/i.test(title) ? 20 : 0)) : 0;
+  const stated27 = n.eligibility.summer2027 === true;
+  const season = stated27 ? 100 : 50;
+  const total = Math.max(0, Math.min(100, Math.round(0.45 * roleFit + 0.2 * flexibility + 0.2 * upside + 0.15 * season)));
   const salary = n.salaryMin ? ` Posted pay: $${n.salaryMin}${n.salaryMax && n.salaryMax !== n.salaryMin ? `–$${n.salaryMax}` : ""}.` : "";
   const rationale =
     `${roleFit >= 80 ? "Title matches a target role" : "Title does not match target-role keywords"}; ` +
-    `${locOk ? "location is remote or in a target state" : "location is outside Remote/TX/NY/CA or unknown"}; ` +
+    `${locOk ? "location is remote or in a target state" : "location is outside Remote/TX/NY/CA/FL or unknown"}; ` +
+    `${stated27 ? "Summer 2027 is stated" : "season is not stated in the posting (check before applying)"}; ` +
     `${hits.length ? `technical signals: ${hits.slice(0, 5).join(", ")}` : "no technical signals found in the posting"}.${salary} ` +
     `Compensation, company size and conversion were not assessed.`;
   return {
@@ -160,7 +170,7 @@ export async function sweepPending(store: Store, limit = 20, budgetMs = 40000) {
 
 // ------------------------------------------------------------------ discovery (public ATS feeds)
 async function fetchBoard(kind: AtsFeed, board: string): Promise<StructuredJobInput[]> {
-  const url = kind === "greenhouse" ? `https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`
+  const url = kind === "greenhouse" ? `https://boards-api.greenhouse.io/v1/boards/${board}/jobs`
     : kind === "lever" ? `https://api.lever.co/v0/postings/${board}?mode=json`
     : `https://api.ashbyhq.com/posting-api/job-board/${board}`;
   const r = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(25000) });
@@ -194,7 +204,21 @@ export async function discoverJobs(store: Store, ctx: Ctx, opts: { maxJobs?: num
     } catch (e) { boardErrors.push(`${b.name}: ${e instanceof Error ? e.message : "failed"}`); }
   });
 
-  const ranked = found
+  // Greenhouse lists carry no description: fetch details only for the few title/location matches, then apply the season check.
+  const detailed: StructuredJobInput[] = [];
+  await pool(found, 8, async (j) => {
+    let full = j;
+    if (!j.description && j.applyUrl) {
+      const a = detectAts(j.applyUrl);
+      if (a.kind === "greenhouse" && a.board && a.jobId) {
+        const d = await getJson(`https://boards-api.greenhouse.io/v1/boards/${a.board}/jobs/${a.jobId}`);
+        if (d?.content) full = { ...j, description: strip(String(d.content)) };
+      }
+    }
+    if (seasonOk(`${full.title}\n${full.description ?? ""}`)) detailed.push(full);
+  });
+
+  const ranked = detailed
     .map((j) => ({ j, s: fitScore(normalizeJob(rawFromRequest({ source: "ats_feed", job: j } as IngestRequest)), false).total }))
     .sort((a, b) => b.s - a.s)
     .slice(0, opts.maxJobs ?? 80)
