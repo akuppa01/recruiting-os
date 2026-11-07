@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@ros/db";
 
 const ALLOWED_NEXT_PATHS = /^\/[a-zA-Z0-9\-_/]*$/;
 
 function safeNext(raw: string | null, fallback = "/"): string {
   if (!raw) return fallback;
   try {
-    // Reject anything that looks like an absolute URL or protocol-relative URL.
     if (raw.startsWith("//") || /^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(raw)) {
       return fallback;
     }
@@ -17,16 +17,36 @@ function safeNext(raw: string | null, fallback = "/"): string {
   }
 }
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const origin = request.nextUrl.origin;
   const next = safeNext(searchParams.get("next"));
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
   }
 
-  const supabase = await createClient();
+  // Build the redirect response FIRST so setAll can attach session cookies to it.
+  const redirectResponse = NextResponse.redirect(`${origin}${next}`);
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            redirectResponse.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error || !data.user) {
@@ -39,6 +59,9 @@ export async function GET(request: Request) {
   const provider = user.app_metadata?.provider ?? "google";
 
   // Bootstrap tenant (idempotent — no-ops if the user already has one).
+  // Use service client for privileged operations; user session is already set.
+  const sb = createServiceClient();
+
   const { error: bootErr } = await supabase.rpc("bootstrap_tenant", {
     p_name: email.split("@")[0] ?? "my-workspace",
   });
@@ -46,8 +69,7 @@ export async function GET(request: Request) {
     console.error("[auth/callback] bootstrap_tenant error:", bootErr.message);
   }
 
-  // Upsert profile fields — tenant_id is resolved via first tenant_members row.
-  const { data: member } = await supabase
+  const { data: member } = await sb
     .from("tenant_members")
     .select("tenant_id")
     .eq("user_id", user.id)
@@ -56,12 +78,12 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (member?.tenant_id) {
-    await supabase
+    await sb
       .from("profiles")
       .update({ recruiting_email: email, auth_provider: provider })
       .eq("tenant_id", member.tenant_id)
       .eq("user_id", user.id);
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return redirectResponse;
 }
