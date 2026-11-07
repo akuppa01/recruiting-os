@@ -13,7 +13,7 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { AutomationPolicy, type AtsKind } from "@ros/core";
 import { SupabaseStore, createServiceClient } from "@ros/db";
-import { applyToJob, detectBlockers } from "../../../packages/workers/src/apply/index.ts";
+import { applyToJob, detectBlockers, waitForBrowsersClosed } from "../../../packages/workers/src/apply/index.ts";
 import { draftEssayAnswer } from "../../../packages/workers/src/apply/essays.ts";
 import { setTracking } from "../src/lib/tracking";
 
@@ -79,7 +79,7 @@ async function main() {
   const profile = readProfile();
   console.log(`Candidate: ${profile.name} <${profile.email}>  Mode: ${SUBMIT ? "LIVE (supervised)" : "DRY RUN (no submit)"}\n`);
 
-  const { data, error } = await store.sb.from("jobs").select("id,tenant_id,user_id,stage,normalized").eq("normalized->tracking->>status", "queued").limit(200);
+  const { data, error } = await store.sb.from("jobs").select("id,tenant_id,user_id,stage,normalized").eq("normalized->tracking->>status", "queued").order("score_total", { ascending: false, nullsFirst: false }).limit(200);
   if (error) throw new Error(`queue query failed: ${error.message}`);
   const queue = (data ?? []) as Array<{ id: string; tenant_id: string; user_id: string; stage: string; normalized: Record<string, any> }>;
   console.log(`${queue.length} job(s) in the auto-apply queue.`);
@@ -113,7 +113,7 @@ async function main() {
       const eligibility = ap.eligibility;
       mkdirSync(SHOTS, { recursive: true });
       const rep = await applyToJob(store, ctx, j.id, {
-        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin }, resumePdfPath: resume.pdf,
+        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin }, resumePdfPath: resume.pdf, keepOpen: flag("keep-open"),
         draftEssay: async (q) => {
           mkdirSync(DRAFTS, { recursive: true });
           const file = join(DRAFTS, `${j.id}.json`);
@@ -167,6 +167,10 @@ async function main() {
     }
   } finally { rl.close(); }
   console.log(`\nDone. Processed ${done} job(s).`);
+  if (flag("keep-open")) {
+    console.log("Filled forms are open in browser windows for you. Review, finish anything missing, and submit yourself. Close the windows when done.");
+    await waitForBrowsersClosed();
+  }
 }
 
 main().catch((e) => { console.error(`\nStopped: ${e instanceof Error ? e.message : e}`); process.exit(1); });

@@ -11,7 +11,7 @@ import { BOARDS } from "./discover-config";
 const INTERN = /\b(intern|interns|internship|fellow|fellowship|co-?op|summer associate)\b/i;
 const ROLE_PRIMARY = /(product (management|manager)|\bapm\b|go[- ]to[- ]market|\bgtm\b|growth strategy|business strategy|corporate strategy|strateg(y|ic) (&|and )?(operations|partnerships?)|strategic partnerships?|product marketing|strategy)/i;
 const ROLE_ANY = /(product (management|manager)|\bpm\b|\bapm\b|product marketing|go[- ]to[- ]market|\bgtm\b|growth|strateg|business (operations|analyst|development)|bizops|partnership|founder|chief of staff|\bmba\b|revenue|operations|marketing|program)/i;
-const TITLE_EXCLUDE = /\b(engineer|engineering|developer|designer|design|counsel|legal|recruit|scientist|research|researcher|machine learning|software|data science|security|infrastructure|hardware|firmware|accountant|technical|ux|ui)\b/i;
+const TITLE_EXCLUDE = /\b(nextstay|veterans?|military|service members?|engineer|engineering|developer|designer|design|counsel|legal|recruit|scientist|research|researcher|machine learning|software|data science|security|infrastructure|hardware|firmware|accountant|technical|ux|ui)\b/i;
 const US_HIT = /(texas|\btx\b|austin|dallas|houston|san antonio|new york|\bnyc\b|\bny\b|california|\bca\b|san francisco|\bsf\b|bay area|los angeles|san jose|san mateo|palo alto|mountain view|menlo park|oakland|san diego|miami|florida|\bfl\b|united states|\busa\b|\bus\b|\bamer\b|north america)/i;
 const REMOTE_HIT = /remote/i;
 const FOREIGN_HIT = /(ireland|united kingdom|\buk\b|emea|canada|netherlands|germany|france|india|apac|australia|singapore|japan|brazil|mexico|europe|london|toronto|dublin|berlin|paris)/i;

@@ -23,6 +23,8 @@ export interface ApplyDeps {
   openPage?: (url: string) => Promise<OpenedPage>;
   /** Draft text for a free-text question. approved=false keeps the draft for the user's review instead of filling it. */
   draftEssay?: (q: { question: string; company: string; title: string; description: string; aiRestricted: boolean }) => Promise<{ text: string; approved: boolean } | null>;
+  /** Leave the browser window open after filling so a human can review, finish and submit it. */
+  keepOpen?: boolean;
   /** Called when a visible CAPTCHA appears. Return true once a human has solved it. Never solved automatically. */
   onCaptcha?: (page: Page) => Promise<boolean>;
   /** Called once the form has been filled (before any submit decision), e.g. to save a screenshot. */
@@ -34,9 +36,33 @@ export interface ApplyDeps {
 export type ApplyOutcome = "already_applied" | "dry_run" | "submitted_confirmed" | "submitted_unverified" | "blocked" | "unsupported" | "live_gated";
 export interface ApplyReport { outcome: ApplyOutcome; result: ApplicationAttemptResult; filled: string[]; applicationId?: string }
 
+/** Company career pages often embed the ATS form in an iframe. Scanning only sees the top document, so open the embedded form directly. */
+async function hopToEmbeddedForm(page: Page): Promise<void> {
+  const findSrc = () => page.evaluate(() => {
+    const f = Array.from(document.querySelectorAll("iframe")).find((i) => /greenhouse\.io|lever\.co|ashbyhq\.com/.test(i.src));
+    return f ? f.src : null;
+  });
+  let src = await findSrc();
+  if (!src) {
+    await page.waitForSelector("iframe[src*='greenhouse'], iframe[src*='lever.co'], iframe[src*='ashbyhq']", { timeout: 8000 }).catch(() => undefined);
+    src = await findSrc();
+  }
+  if (!src) return;
+  await page.goto(src, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+  await page.waitForTimeout(1500);
+}
+
+const launched: Array<{ isConnected(): boolean }> = [];
+/** Resolves once every browser window opened by defaultOpenPage has been closed (used to keep filled forms open for the user). */
+export async function waitForBrowsersClosed(): Promise<void> {
+  while (launched.some((b) => b.isConnected())) await new Promise((r) => setTimeout(r, 2000));
+}
+
 export async function defaultOpenPage(url: string): Promise<OpenedPage> {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: process.env.ROS_HEADED !== "1" });
+  launched.push(browser);
   const page = await (await browser.newContext()).newPage();
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
@@ -125,6 +151,7 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
   const opened = await (deps.openPage ?? defaultOpenPage)(adapter.formUrl(applyUrl));
   const { page } = opened;
   try {
+    await hopToEmbeddedForm(page);
     let blockers = await detectBlockers(page);
     if (blockers.captcha && !blockers.authWall && deps.onCaptcha && (await deps.onCaptcha(page))) blockers = await detectBlockers(page);
     if (blockers.captcha || blockers.authWall) {
@@ -137,6 +164,12 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     }
 
     const fields = await scanForm(page);
+    if (fields.length === 0) {
+      await raise("other", `No application form was found at ${page.url()}. Apply manually from the job page.`);
+      await store.updateApplication(ctx, app.id, { status: "failed", lastError: "no_form_found" });
+      await store.setJobStage(ctx, jobId, "needs_human");
+      return { outcome: "blocked", result: mk("failed", false, { type: "other", detail: "no application form found" }), filled: [], applicationId: app.id };
+    }
     const filled: string[] = [], sensitive: string[] = [], missing: string[] = [];
     const answered = new Set<string>();
     const aiRestricted = /ai policy|ai partnership|guidelines for candidates|do not use ai|without (the use of )?ai|generative ai/i.test(await pageText(page));
@@ -189,6 +222,12 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
         if (want && (await answerField(page, f, want, again).catch(() => false))) { answered.add(key); filled.push(`answered: ${f.cls.topic}`); }
         else if (f.required && !sensitive.some((x) => x.includes(f.group || f.label))) sensitive.push(`${f.cls.topic}: "${f.group || f.label}"`);
       }
+    }
+    if (filled.length === 0) {
+      await raise("other", `Found a page at ${page.url()} but could not fill any application field. Apply manually from the job page.`);
+      await store.updateApplication(ctx, app.id, { status: "failed", lastError: "nothing_filled" });
+      await store.setJobStage(ctx, jobId, "needs_human");
+      return { outcome: "blocked", result: mk("failed", false, { type: "other", detail: "no application fields could be filled" }), filled: [], applicationId: app.id };
     }
     await deps.afterFill?.(page, { filled }).catch(() => undefined);
     if (sensitive.length) {
@@ -244,6 +283,6 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     await store.recordExternalAction(ctx, { system: `ats:${adapter.kind}`, action: "submit_application", status: "unverified", entityId: app.id });
     return { outcome: "submitted_unverified", result: mk("unverified", false, { type: "submission_unverified", detail: "no confirmation detected" }), filled, applicationId: app.id };
   } finally {
-    await opened.close();
+    if (!deps.keepOpen) await opened.close();
   }
 }
