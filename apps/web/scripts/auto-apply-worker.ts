@@ -15,6 +15,8 @@ import { AutomationPolicy, type AtsKind } from "@ros/core";
 import { SupabaseStore, createServiceClient } from "@ros/db";
 import { applyToJob, detectBlockers, waitForBrowsersClosed } from "../../../packages/workers/src/apply/index.ts";
 import { draftEssayAnswer } from "../../../packages/workers/src/apply/essays.ts";
+import { resolveApplicantEmail } from "../../../packages/workers/src/apply/identity.ts";
+import { SupabaseFormTemplateStore } from "../../../packages/workers/src/apply/templates.ts";
 import { setTracking } from "../src/lib/tracking";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -54,10 +56,10 @@ function readProfile() {
   const paras = (docxXml(MASTER).match(/<w:p[ >].*?<\/w:p>/gs) ?? []).map(text).filter((t) => t.trim());
   const name = (paras[0] ?? "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).trim();
   const contact = paras[1] ?? "";
-  const email = contact.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? "";
+  const email = contact.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? ""; // fallback only: application_profile.email wins
   const phone = contact.match(/\+?\d[\d .()-]{8,}\d/)?.[0]?.trim();
   const location = contact.replace(email, "").replace(phone ?? "", "").trim() || undefined;
-  if (!name || !email) throw new Error("Could not read name/email from the PM_Resume.docx header");
+  if (!name) throw new Error("Could not read the name from the PM_Resume.docx header");
   return { name, email, phone, location, education: [] as string[] };
 }
 
@@ -77,7 +79,7 @@ async function main() {
   if (!existsSync(RESUMES)) throw new Error(`Resumes not found at ${RESUMES}`);
   const store = new SupabaseStore(createServiceClient());
   const profile = readProfile();
-  console.log(`Candidate: ${profile.name} <${profile.email}>  Mode: ${SUBMIT ? "LIVE (supervised)" : "DRY RUN (no submit)"}\n`);
+  console.log(`Candidate: ${profile.name}  Mode: ${SUBMIT ? "LIVE (supervised)" : "DRY RUN (no submit)"}\n`);
 
   const { data, error } = await store.sb.from("jobs").select("id,tenant_id,user_id,stage,normalized").eq("normalized->tracking->>status", "queued").order("score_total", { ascending: false, nullsFirst: false }).limit(200);
   if (error) throw new Error(`queue query failed: ${error.message}`);
@@ -109,11 +111,12 @@ async function main() {
 
       console.log(`→ ${label} [${j.normalized.atsKind}] using ${resume.base} resume`);
       const { data: prof } = await store.sb.from("profiles").select("application_profile").eq("tenant_id", ctx.tenantId).eq("user_id", ctx.userId).maybeSingle();
-      const ap = (prof?.application_profile ?? {}) as { eligibility?: Record<string, unknown>; linkedin?: string; answers?: Array<{ match: string; text: string; pick?: string }> };
+      const ap = (prof?.application_profile ?? {}) as { eligibility?: Record<string, unknown>; linkedin?: string; email?: string; answers?: Array<{ match: string; text: string; pick?: string }> };
+      const email = resolveApplicantEmail(ap.email, profile.email); // throws (stopping the run with the reason) for an @asvagroup.org address
       const eligibility = ap.eligibility;
       mkdirSync(SHOTS, { recursive: true });
       const rep = await applyToJob(store, ctx, j.id, {
-        profile: { ...profile, eligibility: eligibility as never, linkedin: ap.linkedin, answers: ap.answers }, resumePdfPath: resume.pdf, keepOpen: flag("keep-open"),
+        profile: { ...profile, email, eligibility: eligibility as never, linkedin: ap.linkedin, answers: ap.answers }, resumePdfPath: resume.pdf, keepOpen: flag("keep-open"), templates: new SupabaseFormTemplateStore(store.sb),
         draftEssay: async (q) => {
           mkdirSync(DRAFTS, { recursive: true });
           const file = join(DRAFTS, `${j.id}.json`);

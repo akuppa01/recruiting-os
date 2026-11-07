@@ -12,3 +12,6 @@ export * from "./pipeline/index.js";
 export * as notifications from "./notify/index.js";
 export * as gmail from "./gmail/index.js";
 export * from "./apply/index.js";
+export * as discovery from "./discovery/index.js";
+export * as qualify from "./qualify/index.js";
+export * as queue from "./queue/index.js";

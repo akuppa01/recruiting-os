@@ -1,27 +1,29 @@
 {
-  "name": "ROS · Ingest webhook → pipeline",
+  "name": "ROS · B · Processing batch (daily)",
   "nodes": [
     {
-      "id": "webhook",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "id": "processing-schedule",
+      "name": "Processing schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
       "position": [
         0,
         0
       ],
-      "webhookId": "ros-ingest",
       "parameters": {
-        "httpMethod": "POST",
-        "path": "ros-ingest",
-        "responseMode": "onReceived",
-        "responseCode": 202,
-        "authentication": "headerAuth"
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
       }
     },
     {
-      "id": "run-pipeline",
-      "name": "Run pipeline",
+      "id": "enqueue-processing",
+      "name": "Enqueue processing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -30,34 +32,34 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "waitBetweenTries": 10000,
       "parameters": {
         "method": "POST",
-        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/pipeline/run",
+        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/process",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-ros-internal-secret",
-              "value": "={{$env.N8N_WEBHOOK_SECRET}}"
+              "name": "authorization",
+              "value": "=Bearer {{$env.CRON_SECRET}}"
             }
           ]
         },
         "options": {
-          "timeout": 60000
+          "timeout": 30000
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ ingestionId: $json.body.ingestionId }) }}"
+        "jsonBody": "{}"
       }
     }
   ],
   "connections": {
-    "Webhook": {
+    "Processing schedule": {
       "main": [
         [
           {
-            "node": "Run pipeline",
+            "node": "Enqueue processing",
             "type": "main",
             "index": 0
           }

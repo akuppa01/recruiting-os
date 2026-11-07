@@ -1,12 +1,16 @@
 import type { Page } from "playwright";
 import { classifyField, type FieldClass } from "./fields.js";
+import { decodeCls, fieldKeyOf } from "./templates.js";
 
 export interface ScannedField {
   index: number; selector: string; tag: string; type: string; name: string; label: string; group: string; options: string[]; combo: boolean; ctx: string; required: boolean; cls: FieldClass;
 }
 
-/** Inspect visible form controls. Selectors are positional data-ros-idx attributes we stamp on the element. */
-export async function scanForm(page: Page): Promise<ScannedField[]> {
+export type RawField = Omit<ScannedField, "cls">;
+export interface ClassifyStats { classifyCalls: number; templateHits: number }
+
+/** Inspect visible form controls (no classification). Selectors are positional data-ros-idx attributes we stamp on the element. */
+export async function scanRaw(page: Page): Promise<RawField[]> {
   const raw = await page.evaluate(() => {
     const out: any[] = [];
     const els = Array.from(document.querySelectorAll("input, select, textarea")) as HTMLInputElement[];
@@ -16,6 +20,7 @@ export async function scanForm(page: Page): Promise<ScannedField[]> {
       const style = getComputedStyle(el);
       const isFile = type === "file";
       if (!isFile && (style.display === "none" || style.visibility === "hidden")) return;
+      if (!isFile && el.getClientRects().length === 0) return; // inside a collapsed/hidden section (e.g. a later page of a multipage form)
       if (!isFile && el.getAttribute("aria-hidden") === "true") return;
       el.setAttribute("data-ros-idx", String(i));
       const id = el.id;
@@ -44,7 +49,22 @@ export async function scanForm(page: Page): Promise<ScannedField[]> {
     });
     return out;
   });
-  return raw.map((r: any) => ({ ...r, selector: `[data-ros-idx="${r.index}"]`, cls: classifyField(r.group || r.label, r.name, r.type) }));
+  return raw.map((r: any) => ({ ...r, selector: `[data-ros-idx="${r.index}"]` }));
+}
+
+/** Classify raw fields. A stored template (`lookup`: kind|label -> class) replaces classifyField for fields it already knows. */
+export function classifyRaw(raw: RawField[], lookup?: Map<string, string>, stats?: ClassifyStats): ScannedField[] {
+  return raw.map((r) => {
+    const hit = lookup?.get(fieldKeyOf(r));
+    const known = hit ? decodeCls(hit) : null;
+    if (known) { if (stats) stats.templateHits++; return { ...r, cls: known }; }
+    if (stats) stats.classifyCalls++;
+    return { ...r, cls: classifyField(r.group || r.label, r.name, r.type) };
+  });
+}
+
+export async function scanForm(page: Page): Promise<ScannedField[]> {
+  return classifyRaw(await scanRaw(page));
 }
 
 export interface BlockerReport { captcha: boolean; authWall: boolean; details: string[] }

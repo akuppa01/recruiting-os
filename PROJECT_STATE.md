@@ -109,3 +109,9 @@ Code: `packages/workers/src/{normalize,score,stages,connectors,resume,apply}`, `
 5. Chief of Staff handler, `/api/internal/*` n8n routes, exception resolve route: unverified/absent (see handlers.ts).
 6. Evidence bank empty (B-003) so no real tailored resume can be produced. n8n never executed. Gmail OAuth not set up (B-004).
 **Estimated effort:** P1 verification + CoS + internal routes ~1 cycle; model router/budgets ~0.5; discovery adapters live ~1; UI redesign ~1–2; relationship engine live ~1.
+
+## V3 status (2026-11-07, lead)
+Done and tested (vitest, no network): source adapters + qualification (61 tests), apply engine with form memory/fallback strategies/multipage/validation detection (36 tests on mock forms), durable queue + runner (13 + 11 tests, 1 live smoke), dashboard lifecycle/health helpers (13 tests). Migration 0005 applied (tasks, task_logs, worker_heartbeats, source_health, ats_form_templates).
+Decisions: applicant email is the Tepper address (profiles.application_profile.email); queue-driven auto-apply only for jobs the user placed in the Auto-apply queue; n8n runs exactly three batch workflows and the Tepper inbox is read by an n8n Gmail node that posts one batch to /api/internal/gmail-sync.
+Not done / not verified: handlers not wired to the queue; n8n workflows not created or executed; Gmail/alerts never exercised against real mail; Stagehand not installed; Workday not built; full typecheck unavailable locally; Supabase form-template store never run against the live table.
+See INTEGRATION_STATUS.md, TEST_RESULTS.md, COST_MODEL.md, BLOCKERS.md.

@@ -33,3 +33,15 @@ Status: TODO / DOING / DONE / BLOCKED. Update in place; do not delete rows.
 | E5 | n8n workflows (export JSON), retry/DLQ docs, monitoring | E | DONE | E1 | JSON validates — 7 workflows generated + structurally validated; NOT run in live n8n |
 | A5 | export/deletion, usage metering, cost tracking, feature flags | A | DONE (in-memory tested) — packages/db/src/admin.ts usage metering, flags, export, delete; SupabaseAdmin typechecks only | A3 | tests |
 | D3 | onboarding wizard | D | DONE for UI; save needs auth + /api/resume | D2 | route builds |
+
+## V3 (autonomous discovery + application pipeline)
+| ID | Task | Owner | Status | Notes |
+|----|------|-------|--------|-------|
+| V1 | Migration 0005 + shared contracts (`core/v3.ts`) | lead | DONE | applied to live project |
+| V2 | Source adapters, canonical URLs, health store, qualification | A | DONE (fixtures only) | live feeds via web Find jobs predate this; email adapters unexercised |
+| V3 | Apply engine: strategies, form memory, multipage, validation, metrics, benchmark | C | DONE (mock forms only) | Stagehand not installed; Workday not built |
+| V4 | Durable queue, runner, batch endpoints, 3 n8n workflows | D | DONE (code) / NOT DEPLOYED | workflows not created in n8n |
+| V5 | Dashboard lifecycle strip, per-job pipeline fields, health panel | E | DONE (not viewed in browser) | needs Vercel build |
+| V6 | Wire apply/discover/qualify handlers into the worker | lead | TODO | B-011 |
+| V7 | Create + test n8n workflows with real Gmail | lead | BLOCKED | B-007, B-008, B-009 |
+| V8 | Outreach handoff after confirmed submission | lead | TODO | reuse existing outreach modules |

@@ -13,7 +13,7 @@ const confirm = `document.body.innerHTML='<h1>Thank you for applying!</h1><p>You
 export const forms = {
   ok: page(`<form>${base}<button type="submit">Submit application</button></form>`, confirm),
   noconfirm: page(`<form>${base}<button type="submit">Submit application</button></form>`, ``),
-  captcha: page(`<form>${base}<div class="g-recaptcha" data-sitekey="x"></div><button type="submit">Submit application</button></form>`, confirm),
+  captcha: page(`<form>${base}<div class="g-recaptcha" data-sitekey="x" style="width:304px;height:78px;border:1px solid #ccc"></div><button type="submit">Submit application</button></form>`, confirm),
   auth: page(`<h2>Sign in to apply</h2><input type="email"><input type="password"><button>Log in</button>`),
   sensitive_required: page(`<form>${base}<label for="sp">Will you now or in the future require visa sponsorship? *</label><input id="sp" name="q1" required><button type="submit">Submit application</button></form>`, confirm),
   sensitive_optional: page(`<form>${base}<label for="vt">Veteran Status</label><input id="vt" name="eeo_veteran"><label for="gd">Gender</label><input id="gd" name="eeo_gender"><button type="submit">Submit application</button></form>`, confirm),

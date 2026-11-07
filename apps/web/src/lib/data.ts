@@ -6,6 +6,10 @@ import * as demo from "./demo-data";
 import { getStore } from "./store";
 import { getSessionCtx } from "./session-ctx";
 import { readTracking } from "./tracking";
+import {
+  derivePhase, nextAction, queueDepth, sourceLabel, summarizeApplyStats, workerStatus,
+  type ApplyRecord, type ApplyStats, type PhaseOrClosed, type QueueDepth, type TaskLite,
+} from "./pipeline-view";
 export type { JobView, CompanyView, ApplicationView, ContactView, ExceptionView, ProofView, UpdateView } from "./demo-data";
 
 export const isDemoMode = () => !hasSupabaseEnv();
@@ -152,4 +156,161 @@ export function ago(iso: string) {
   if (h < 1) return "just now";
   if (h < 24) return `${h}h ago`;
   return `${Math.round(h / 24)}d ago`;
+}
+
+// ------------------------------------------------------------------ V3 pipeline state
+// Every reader is tenant-scoped (tenant_id + user_id) and derives from real rows. When a table is empty or unreadable the
+// result is empty, never invented. Demo mode and signed-out requests return empties.
+
+async function rowsOf(p: PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<Row[]> {
+  const r = await p;
+  if (r.error) { console.error("[data] V3 read failed:", r.error.message); return []; }
+  return (r.data as Row[] | null) ?? [];
+}
+
+export interface SourceHealthView {
+  source: string; label: string; status: "ok" | "degraded" | "failed" | "not_configured";
+  lastAttemptAt: string | null; lastSuccessAt: string | null; lastError: string | null; itemsLastRun: number; itemsTotal: number;
+}
+
+export async function getSourceHealth(): Promise<SourceHealthView[]> {
+  const l = await live();
+  if (!l) return [];
+  const data = await rowsOf(l.sb.from("source_health").select("*").match(scope(l.ctx)).order("source"));
+  return data.map((r): SourceHealthView => ({
+    source: String(r.source), label: sourceLabel(String(r.source)), status: r.status as SourceHealthView["status"],
+    lastAttemptAt: r.last_attempt_at ?? null, lastSuccessAt: r.last_success_at ?? null, lastError: r.last_error ?? null,
+    itemsLastRun: Number(r.items_last_run ?? 0), itemsTotal: Number(r.items_total ?? 0),
+  }));
+}
+
+export interface TaskView extends TaskLite { attempts: number; maxAttempts: number; leaseUntil: string | null; createdAt: string }
+
+const toTask = (r: Row): TaskView => ({
+  id: String(r.id), kind: String(r.kind), status: String(r.status),
+  jobId: typeof r.payload?.jobId === "string" ? r.payload.jobId : null,
+  lastError: r.last_error ?? null, result: (r.result as Record<string, unknown> | null) ?? null,
+  workerId: r.worker_id ?? null, updatedAt: r.updated_at ?? null, costUsd: Number(r.cost_usd ?? 0),
+  attempts: Number(r.attempts ?? 0), maxAttempts: Number(r.max_attempts ?? 3), leaseUntil: r.lease_until ?? null, createdAt: String(r.created_at),
+});
+
+export async function getTasks(limit = 50): Promise<TaskView[]> {
+  const l = await live();
+  if (!l) return [];
+  const data = await rowsOf(l.sb.from("tasks").select("*").match(scope(l.ctx)).order("created_at", { ascending: false }).limit(limit));
+  return data.map(toTask);
+}
+
+export interface TaskLogView { id: string; taskId: string; kind: string | null; level: string; message: string; createdAt: string }
+
+export async function getRecentTaskLogs(limit = 30): Promise<TaskLogView[]> {
+  const l = await live();
+  if (!l) return [];
+  const data = await rowsOf(l.sb.from("task_logs").select("*, tasks(kind)").match(scope(l.ctx)).order("created_at", { ascending: false }).limit(limit));
+  return data.map((r): TaskLogView => ({
+    id: String(r.id), taskId: String(r.task_id), kind: r.tasks?.kind ?? null, level: String(r.level), message: String(r.message), createdAt: String(r.created_at),
+  }));
+}
+
+export interface WorkerView { workerId: string; host: string | null; kinds: string[]; currentTask: string | null; lastSeen: string; startedAt: string; status: "online" | "offline" }
+
+/** worker_heartbeats has no tenant column (workers are shared infrastructure), so this lists every registered worker. */
+export async function getWorkers(): Promise<WorkerView[]> {
+  const l = await live();
+  if (!l) return [];
+  const data = await rowsOf(l.sb.from("worker_heartbeats").select("*").order("last_seen", { ascending: false }).limit(20));
+  return data.map((r): WorkerView => ({
+    workerId: String(r.worker_id), host: r.host ?? null, kinds: Array.isArray(r.kinds) ? r.kinds.map(String) : [],
+    currentTask: r.current_task ?? null, lastSeen: String(r.last_seen), startedAt: String(r.started_at), status: workerStatus(r.last_seen ?? null),
+  }));
+}
+
+export async function getApplyStats(): Promise<ApplyStats> {
+  const l = await live();
+  if (!l) return summarizeApplyStats([]);
+  const [apps, tasks] = await Promise.all([
+    rowsOf(l.sb.from("applications").select("status, confirmed, job_id, jobs(normalized)").match(scope(l.ctx))),
+    rowsOf(l.sb.from("tasks").select("payload, result").match(scope(l.ctx)).eq("kind", "apply").order("created_at", { ascending: true }).limit(1000)),
+  ]);
+  const strategy = new Map<string, string>(); // oldest first, so the latest apply task per job wins
+  for (const t of tasks) {
+    const jobId = t.payload?.jobId; const s = t.result?.strategy;
+    if (typeof jobId === "string" && typeof s === "string") strategy.set(jobId, s);
+  }
+  return summarizeApplyStats(apps.map((a): ApplyRecord => ({
+    status: String(a.status), confirmed: !!a.confirmed,
+    provider: typeof a.jobs?.normalized?.atsKind === "string" ? a.jobs.normalized.atsKind : null,
+    strategy: strategy.get(String(a.job_id)) ?? null,
+  })));
+}
+
+export interface JobPipelineView {
+  jobId: string; company: string; title: string; source: string; sourceLabel: string; fitScore: number | null; deadline: string | null;
+  phase: PhaseOrClosed; atsProvider: string; strategy: string | null; currentActivity: string | null;
+  confirmation: string | null; failureReason: string | null; nextAction: string;
+}
+
+export async function getPipelineViews(): Promise<JobPipelineView[]> {
+  const l = await live();
+  if (!l) return [];
+  const jobs = await l.store.searchJobs(l.ctx, { limit: 500 });
+  if (!jobs.length) return [];
+  const [ings, taskRows, apps, openEx] = await Promise.all([
+    rowsOf(l.sb.from("ingestions").select("id, source, job_id").match(scope(l.ctx)).limit(2000)),
+    rowsOf(l.sb.from("tasks").select("*").match(scope(l.ctx)).order("created_at", { ascending: false }).limit(1000)),
+    rowsOf(l.sb.from("applications").select("id, job_id, status, confirmed, evidence, last_error").match(scope(l.ctx))),
+    l.store.listExceptions(l.ctx, true),
+  ]);
+  const ingSource = new Map(ings.map((r) => [String(r.id), String(r.source)]));
+  const jobByIngestion = new Map(ings.filter((r) => r.job_id).map((r) => [String(r.id), String(r.job_id)]));
+  const appByJob = new Map(apps.map((a) => [String(a.job_id), a]));
+  const jobOfApp = new Map(apps.map((a) => [String(a.id), String(a.job_id)]));
+
+  const tasksByJob = new Map<string, TaskView[]>(); // newest first
+  for (const r of taskRows) {
+    const t = toTask(r);
+    const viaIngestion = typeof r.payload?.ingestionId === "string" ? jobByIngestion.get(r.payload.ingestionId) ?? null : null;
+    const jid = t.jobId ?? viaIngestion;
+    if (!jid) continue;
+    const arr = tasksByJob.get(jid) ?? [];
+    arr.push({ ...t, jobId: jid });
+    tasksByJob.set(jid, arr);
+  }
+  const exByJob = new Map<string, string>();
+  for (const e of openEx) {
+    const jid = e.entityType === "job" ? e.entityId : jobOfApp.get(e.entityId ?? "") ?? null;
+    if (jid && !exByJob.has(jid)) exByJob.set(jid, e.detail);
+  }
+
+  return jobs.map((j): JobPipelineView => {
+    const jt = tasksByJob.get(j.id) ?? [];
+    const trackingStatus = readTracking(j.normalized).status;
+    const active = jt.find((t) => t.status === "leased") ?? jt.find((t) => t.status === "queued") ?? null;
+    const app = appByJob.get(j.id);
+    const phase = derivePhase({ stage: j.stage, trackingStatus, tasks: jt });
+    const exDetail = exByJob.get(j.id) ?? null;
+    const failedTask = jt.find((t) => (t.status === "failed" || t.status === "dead") && t.lastError);
+    const ev = app?.evidence as Row | null | undefined;
+    const strategyTask = jt.find((t) => t.kind === "apply" && typeof t.result?.strategy === "string");
+    const source = ingSource.get(j.ingestionId) ?? "unknown";
+    return {
+      jobId: j.id, company: j.normalized.company, title: j.normalized.title, source, sourceLabel: sourceLabel(source),
+      fitScore: j.score?.total ?? null, deadline: j.normalized.deadline, phase, atsProvider: j.normalized.atsKind,
+      strategy: strategyTask ? String(strategyTask.result?.strategy) : null,
+      currentActivity: active ? `${active.kind} ${active.status === "leased" ? `running${active.workerId ? ` on ${active.workerId}` : ""}` : "queued"}` : null,
+      confirmation: app?.confirmed && ev ? [ev.kind, ev.detail].filter(Boolean).join(": ") : null,
+      failureReason: failedTask?.lastError ?? exDetail ?? (app && (app.status === "failed" || app.status === "unverified") ? app.last_error ?? null : null),
+      nextAction: nextAction({ phase, stage: j.stage, trackingStatus, hasOpenException: !!exDetail, activeTaskKind: active?.kind ?? null, confirmed: !!app?.confirmed }),
+    };
+  });
+}
+
+export interface PipelineHealth { sources: SourceHealthView[]; workers: WorkerView[]; queue: QueueDepth; stats: ApplyStats; hasData: boolean }
+
+export async function getPipelineHealth(): Promise<PipelineHealth> {
+  const l = await live();
+  const [sources, workers, stats] = await Promise.all([getSourceHealth(), getWorkers(), getApplyStats()]);
+  const queueRows = l ? await rowsOf(l.sb.from("tasks").select("status").match(scope(l.ctx)).limit(5000)) : [];
+  const queue = queueDepth(queueRows.map((r) => ({ status: String(r.status) })));
+  return { sources, workers, queue, stats, hasData: sources.length > 0 || workers.length > 0 || queueRows.length > 0 || stats.attempted > 0 };
 }

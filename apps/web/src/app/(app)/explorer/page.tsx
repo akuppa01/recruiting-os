@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge, Empty, PageHeader, Score } from "@/components/ui";
-import { ROLE_LABEL, STAGE_LABEL, getJobs, isDemoMode } from "@/lib/data";
+import { ROLE_LABEL, STAGE_LABEL, ago, getJobs, getPipelineViews, isDemoMode } from "@/lib/data";
+import { PHASE_LABEL } from "@/lib/pipeline-view";
 import { TrackingPanel } from "@/components/tracking-panel";
 
 const FACTORS: [keyof NonNullable<Awaited<ReturnType<typeof getJobs>>[number]["breakdown"]>, string][] = [
@@ -10,11 +11,12 @@ const FACTORS: [keyof NonNullable<Awaited<ReturnType<typeof getJobs>>[number]["b
 
 export default async function Explorer({ searchParams }: { searchParams: Promise<{ q?: string; job?: string; min?: string }> }) {
   const sp = await searchParams;
-  const all = await getJobs();
+  const [all, views] = await Promise.all([getJobs(), getPipelineViews()]);
   const q = (sp.q ?? "").toLowerCase();
   const min = Number(sp.min ?? 0) || 0;
   const rows = all.filter((j) => (!q || `${j.company} ${j.title} ${j.location}`.toLowerCase().includes(q)) && (j.score ?? 0) >= min).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   const sel = all.find((j) => j.id === sp.job) ?? null;
+  const pv = sel ? views.find((v) => v.jobId === sel.id) ?? null : null;
 
   return (
     <>
@@ -59,6 +61,21 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
                   ))}
                 </dl>
               ) : <p className="text-sm text-soft mt-4">No score breakdown yet.</p>}
+              {pv && (
+                <dl className="mt-4 pt-4 border-t border-mist text-sm grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1.5" aria-label="Pipeline status">
+                  <dt className="text-soft">Phase</dt><dd>{pv.phase === "CLOSED" ? "Closed" : PHASE_LABEL[pv.phase]}</dd>
+                  <dt className="text-soft">Source</dt><dd>{pv.sourceLabel}</dd>
+                  <dt className="text-soft">Fit score</dt><dd className="tabular-nums">{pv.fitScore ?? "Not scored"}</dd>
+                  <dt className="text-soft">Deadline</dt><dd>{pv.deadline ?? "None found"}</dd>
+                  <dt className="text-soft">ATS</dt><dd>{pv.atsProvider}</dd>
+                  <dt className="text-soft">Strategy</dt><dd>{pv.strategy ?? "Not run yet"}</dd>
+                  <dt className="text-soft">Worker</dt><dd>{pv.currentActivity ?? "Idle"}</dd>
+                  <dt className="text-soft">Confirmation</dt><dd>{pv.confirmation ?? "None recorded"}</dd>
+                  <dt className="text-soft">Failure</dt><dd className={pv.failureReason ? "text-rust" : ""}>{pv.failureReason ?? "None"}</dd>
+                  <dt className="text-soft">Next action</dt><dd className="font-medium">{pv.nextAction}</dd>
+                  <dt className="text-soft">Updated</dt><dd>{ago(sel.updatedAt)}</dd>
+                </dl>
+              )}
               {!isDemoMode() && (
                 <TrackingPanel key={sel.id} jobId={sel.id} applyUrl={sel.applyUrl ?? null} status={sel.tracking?.status ?? null} notes={sel.tracking?.notes ?? ""} followUpAt={sel.tracking?.followUpAt ?? null} />
               )}

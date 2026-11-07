@@ -1,0 +1,181 @@
+{
+  "name": "ROS · C · Gmail sync + due follow-ups (every 3h)",
+  "nodes": [
+    {
+      "id": "gmail-schedule",
+      "name": "Gmail schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */3 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gmail-get-many",
+      "name": "Gmail: get recent messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        300,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 200,
+        "simple": false,
+        "filters": {
+          "q": "newer_than:2d (from:joinhandshake.com OR from:12twenty.com OR from:linkedin.com OR from:indeed.com OR from:indeedmail.com OR from:greenhouse.io OR from:lever.co OR from:ashbyhq.com OR (in:inbox subject:re))",
+          "readStatus": "both"
+        }
+      }
+    },
+    {
+      "id": "aggregate-emails",
+      "name": "Aggregate emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Collapse every Gmail item into ONE { emails: [...] } item (the endpoint caps at 200 emails / 1 MB).\nconst hdr = (m, name) => ((m.payload && m.payload.headers) || m.headers || []).find((h) => (h.name || '').toLowerCase() === name)?.value;\nconst decode = (b64) => { try { return Buffer.from(String(b64).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'); } catch (e) { return ''; } };\nconst bodyOf = (p) => !p ? '' : (p.mimeType === 'text/plain' && p.body && p.body.data ? decode(p.body.data) : (p.parts || []).map(bodyOf).join('\\n'));\nconst emails = $input.all().map((i) => i.json).map((m) => ({\n  from: m.From || (m.from && m.from.text) || hdr(m, 'from') || '',\n  subject: m.Subject || m.subject || hdr(m, 'subject') || '',\n  text: m.text || m.textPlain || bodyOf(m.payload) || m.snippet || '',\n  date: m.date ? String(m.date) : (m.internalDate ? new Date(Number(m.internalDate)).toISOString() : (hdr(m, 'date') || undefined)),\n  messageId: m.id || m.messageId || '',\n  threadId: m.threadId || undefined,\n})).filter((e) => e.from && e.messageId).slice(0, 200);\nreturn [{ json: { emails } }];"
+      }
+    },
+    {
+      "id": "post-emails-to-backend",
+      "name": "POST emails to backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/gmail-sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "=Bearer {{$env.CRON_SECRET}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ emails: $json.emails }) }}"
+      }
+    },
+    {
+      "id": "enqueue-due-follow-ups",
+      "name": "Enqueue due follow-ups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/followups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "=Bearer {{$env.CRON_SECRET}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}"
+      }
+    }
+  ],
+  "connections": {
+    "Gmail schedule": {
+      "main": [
+        [
+          {
+            "node": "Gmail: get recent messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: get recent messages": {
+      "main": [
+        [
+          {
+            "node": "Aggregate emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate emails": {
+      "main": [
+        [
+          {
+            "node": "POST emails to backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST emails to backend": {
+      "main": [
+        [
+          {
+            "node": "Enqueue due follow-ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "recruiting-os"
+    }
+  ]
+}

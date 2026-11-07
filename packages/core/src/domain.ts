@@ -26,6 +26,7 @@ export type JobStage = z.infer<typeof JobStage>;
 export const IngestSource = z.enum([
   "manual_url", "manual_text", "mcp", "gmail_alert", "whatsapp_export", "gdrive_sheet",
   "handshake", "twelve_twenty", "linkedin_alert", "ats_feed", "career_page", "x_lead", "spreadsheet_upload",
+  "indeed_alert", "remote_feed",
 ]);
 export type IngestSource = z.infer<typeof IngestSource>;
 

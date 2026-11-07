@@ -1,13 +1,17 @@
 import { Badge, PageHeader } from "@/components/ui";
 import { PolicyForm } from "@/components/policy-form";
 import { PrefsForm } from "@/components/prefs-form";
+import { PipelineHealth } from "@/components/pipeline-health";
+import { getPipelineHealth } from "@/lib/data";
 import { getIntegrations } from "@/lib/integrations";
 
-export default function Settings() {
+export default async function Settings() {
   const items = getIntegrations();
+  const health = await getPipelineHealth();
   return (
     <>
       <PageHeader title="Integrations and settings" />
+      <PipelineHealth health={health} />
       <section aria-labelledby="int" className="mb-10">
         <h2 id="int" className="font-serif text-xl mb-1">Integrations</h2>
         <p className="text-sm text-soft mb-4">"Configured" means credentials are present on the server. It does not mean the connection has been tested.</p>

@@ -4,8 +4,9 @@ const dir = new URL("../n8n/workflows/", import.meta.url);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 
 describe("n8n workflow JSON (structural validation only; NOT executed in a live n8n)", () => {
-  it("has the six required workflows", () => {
-    for (const n of ["ingest-webhook", "ats-poll", "outreach-tick", "daily-summary", "dlq-alert", "gmail-poll"]) expect(files).toContain(`${n}.json`);
+  it("has exactly the three batch workflows (discovery, processing, gmail + follow-ups)", () => {
+    for (const n of ["discovery-batch", "processing-batch", "gmail-followups"]) expect(files).toContain(`${n}.json`);
+    expect(files).toHaveLength(3);
   });
   for (const f of files) it(`${f}: valid graph`, () => {
     const w = JSON.parse(readFileSync(new URL(f, dir), "utf8"));

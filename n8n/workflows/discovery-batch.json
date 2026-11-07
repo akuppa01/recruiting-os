@@ -1,9 +1,9 @@
 {
-  "name": "ROS · Daily summary",
+  "name": "ROS · A · Discovery batch (daily)",
   "nodes": [
     {
-      "id": "daily-08-00",
-      "name": "Daily 08:00",
+      "id": "discovery-schedule",
+      "name": "Discovery schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -15,15 +15,15 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 8 * * *"
+              "expression": "0 6 * * *"
             }
           ]
         }
       }
     },
     {
-      "id": "send-daily-summary",
-      "name": "Send daily summary",
+      "id": "enqueue-discovery",
+      "name": "Enqueue discovery",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -32,31 +32,34 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "waitBetweenTries": 10000,
       "parameters": {
         "method": "POST",
-        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/daily-summary",
+        "url": "={{$env.ROS_API_BASE_URL}}/api/internal/discover",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-ros-internal-secret",
-              "value": "={{$env.N8N_WEBHOOK_SECRET}}"
+              "name": "authorization",
+              "value": "=Bearer {{$env.CRON_SECRET}}"
             }
           ]
         },
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"schedule\":\"daily\"}"
       }
     }
   ],
   "connections": {
-    "Daily 08:00": {
+    "Discovery schedule": {
       "main": [
         [
           {
-            "node": "Send daily summary",
+            "node": "Enqueue discovery",
             "type": "main",
             "index": 0
           }

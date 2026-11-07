@@ -27,6 +27,8 @@ export interface DiscoveredJob {
   evidence: { kind: "email" | "feed" | "import" | "manual"; excerpt?: string; receivedAt?: string; board?: string };
   /** School-specific eligibility/application text from Handshake/12twenty, preserved verbatim. */
   schoolRequirements?: string;
+  /** True when only a URL was found (title/company are placeholders); ingest should enrich from the posting. */
+  needsEnrichment?: boolean;
 }
 
 export interface SourceRunResult { source: SourceId; jobs: DiscoveredJob[]; error?: string; notConfigured?: string }
