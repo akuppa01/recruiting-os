@@ -138,6 +138,12 @@ export class InMemoryStore implements Store {
   async listExceptions(ctx: Ctx, openOnly = false) {
     return [...this.exceptions.values()].filter((e) => same(e.ctx, ctx) && (!openOnly || !e.resolvedAt));
   }
+  async resolveException(ctx: Ctx, id: string) {
+    const e = this.exceptions.get(id);
+    if (!e || !same(e.ctx, ctx)) return false;
+    if (!e.resolvedAt) e.resolvedAt = new Date().toISOString();
+    return true;
+  }
 
   async upsertCompany(ctx: Ctx, name: string, domain: string | null) {
     const n = name.trim().toLowerCase();

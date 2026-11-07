@@ -3,8 +3,11 @@ import { z } from "zod";
 import { AutomationPolicy, IngestRequest, JobStage, Preferences, type IngestResponse } from "@ros/core";
 import { getStoreAsync } from "./store";
 import { enqueueIngestion } from "./enqueue";
-import { bootPipeline } from "./pipeline-boot";
+import { hasEnqueue } from "./enqueue";
+import { discoverJobs, processWithin } from "./mvp";
+import { setTracking, TRACK_STATUSES } from "./tracking";
 import { err, json, UUID_RE, withAuth } from "./http";
+import { answerQuestion } from "./chief";
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_TEXT_CHARS = 200_000;
@@ -30,13 +33,18 @@ export const postIngest = withAuth(async (req, ctx) => {
   const row = await store.createIngestion(ctx, request);
   // Store.createIngestion doesn't report "created vs existing"; an existing ingestion already has its accepted event.
   const isNew = row.status === "accepted" && (await store.listEvents(ctx, { entityId: row.id, kind: "ingestion.accepted", limit: 1 })).length === 0;
-  if (isNew) {
-    await store.logEvent(ctx, "ingestion.accepted", "ingestion", row.id, { source: request.source });
-    // Never fail the request because the pipeline trigger is down: the poller claims 'accepted' rows.
-    bootPipeline();
-    const r = await enqueueIngestion(ctx, row.id);
-    if (r.outcome === "failed" || r.outcome === "timeout")
-      await store.logEvent(ctx, "ingestion.enqueue_" + r.outcome, "ingestion", row.id, { error: r.error ?? null });
+  if (isNew) await store.logEvent(ctx, "ingestion.accepted", "ingestion", row.id, { source: request.source });
+  if (hasEnqueue()) {
+    // External trigger (n8n) registered: hand off; a failing hook never fails the request (the sweep claims 'accepted' rows).
+    if (isNew) {
+      const r = await enqueueIngestion(ctx, row.id);
+      if (r.outcome === "failed" || r.outcome === "timeout")
+        await store.logEvent(ctx, "ingestion.enqueue_" + r.outcome, "ingestion", row.id, { error: r.error ?? null });
+    }
+  } else if (row.status === "accepted" || row.status === "failed") {
+    // Bounded inline processing. Progress is persisted per step; if it doesn't finish in time the row is swept later.
+    const out = await processWithin(store, ctx, row.id, 25000);
+    if (out === "deferred") await store.logEvent(ctx, "ingestion.processing_deferred", "ingestion", row.id, {});
   }
   const body: IngestResponse = { ingestionId: row.id, status: "accepted", duplicateOf: null };
   return json(body, 202);
@@ -116,17 +124,42 @@ export const getExceptions = withAuth(async (req, ctx) => {
   return json({ exceptions, count: exceptions.length });
 });
 
-// POST /api/chief-of-staff {question}. No LLM yet: answers from database counts only and says so (source:"database").
+// POST /api/chief-of-staff {question}. Deterministic, tenant-scoped database tools (see chief.ts); no model call for lookups.
 export const chiefOfStaff = withAuth(async (req, ctx) => {
   const body = await req.json().catch(() => ({}));
   const q = typeof body?.question === "string" ? body.question.slice(0, 2000) : "";
   const store = await getStoreAsync();
-  const [counts, open] = await Promise.all([store.pipelineCounts(ctx), store.listExceptions(ctx, true)]);
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const lines = Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(", ") || "no jobs yet";
-  return json({
-    source: "database",
-    question: q,
-    answer: `Pipeline has ${total} jobs (${lines}). ${open.length} open exception(s). Free-form answers need the Anthropic AI worker, which is not wired yet.`,
-  });
+  return json({ question: q, ...(await answerQuestion(store, ctx, q)) });
+});
+});
+
+export const resolveExceptionHandler = (id: string) => withAuth(async (_req, ctx) => {
+  if (!UUID_RE.test(id)) return err(400, "invalid_id");
+  const store = await getStoreAsync();
+  if (!(await store.resolveException(ctx, id))) return err(404, "not_found");
+  await store.logEvent(ctx, "exception.resolved", "exception", id, {});
+  return json({ id, resolved: true });
+});
+
+export const postDiscover = withAuth(async (_req, ctx) => {
+  const store = await getStoreAsync();
+  return json(await discoverJobs(store, ctx));
+});
+
+const TrackingBody = z.object({
+  status: z.enum(TRACK_STATUSES).nullable().optional(),
+  notes: z.string().max(5000).optional(),
+  followUpAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+});
+
+export const putTracking = (id: string) => withAuth(async (req, ctx) => {
+  if (!UUID_RE.test(id)) return err(400, "invalid_id");
+  const b = await readJson(req);
+  if (!b.ok) return b.res;
+  const parsed = TrackingBody.safeParse(b.body);
+  if (!parsed.success) return err(400, "invalid_request", parsed.error.flatten());
+  const store = await getStoreAsync();
+  const t = await setTracking(store, ctx, id, parsed.data);
+  if (!t) return err(404, "not_found");
+  return json({ id, tracking: t });
 });

@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { QuickIngest } from "@/components/quick-ingest";
+import { DiscoverButton } from "@/components/discover-button";
 import { Badge, Empty, PageHeader } from "@/components/ui";
-import { STAGE_LABEL, ago, getExceptions, getJobs, getUpdates } from "@/lib/data";
+import { STAGE_LABEL, ago, getExceptions, getJobs, getUpdates, isDemoMode } from "@/lib/data";
 
 export default async function CommandCenter() {
   const [jobs, exceptions, updates] = await Promise.all([getJobs(), getExceptions(), getUpdates()]);
   const open = exceptions.filter((e) => !e.resolved);
   const live = jobs.filter((j) => !["archived", "duplicate", "rejected", "withdrawn"].includes(j.stage));
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
+  const followUps = jobs.filter((j) => j.tracking?.followUpAt && j.tracking.followUpAt <= today);
+  const saved = jobs.filter((j) => j.tracking?.status === "saved");
+  const closing = live.filter((j) => !j.tracking?.status && j.deadline && j.deadline >= today && j.deadline <= soon);
+  const toReview = live.filter((j) => !j.tracking?.status && j.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+  const counts = (s: string) => jobs.filter((j) => j.tracking?.status === s).length;
   const board = [...live].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 8);
   const day = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -16,7 +24,34 @@ export default async function CommandCenter() {
       <div className="flex flex-col">
 
       {/* Mobile-first order: things needing you, replies, quick add, then the board. */}
-      <section aria-labelledby="attn" className="mb-8 order-1">
+      <section aria-labelledby="prio" className="mb-8 order-1">
+        <h2 id="prio" className="font-serif text-xl mb-3">Priorities for today</h2>
+        <p className="text-sm text-soft mb-3">Saved {counts("saved")} · Applied {counts("applied")} · Interviewing {counts("interviewing")} · Offer {counts("offer")} · Rejected {counts("rejected")}</p>
+        {followUps.length + saved.length + closing.length + toReview.length === 0 ? (
+          <p className="text-soft">Nothing queued. Use Find jobs or Add a job below.</p>
+        ) : (
+          <div className="panel divide-y divide-mist">
+            {([["Follow up today", followUps], ["Closing within 7 days", closing], ["Saved, not applied yet", saved], ["Top matches to review", toReview]] as const).map(([label, list]) =>
+              list.length === 0 ? null : (
+                <div key={label} className="p-4">
+                  <p className="text-sm font-medium mb-2">{label}</p>
+                  <ul className="space-y-1.5">
+                    {list.map((j) => (
+                      <li key={j.id} className="flex items-center gap-3 text-sm">
+                        <span className="tabular-nums w-8 text-soft">{j.score ?? "–"}</span>
+                        <Link href={`/explorer?job=${j.id}`} className="underline truncate">{j.company}: {j.title}</Link>
+                        {label === "Closing within 7 days" && <span className="ml-auto text-xs text-soft whitespace-nowrap">closes {j.deadline}</span>}
+                        {label === "Follow up today" && <span className="ml-auto text-xs text-soft whitespace-nowrap">due {j.tracking?.followUpAt}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="attn" className="mb-8 order-2">
         <h2 id="attn" className="font-serif text-xl mb-3">
           {open.length ? `${open.length} ${open.length === 1 ? "thing needs" : "things need"} you` : "Nothing needs you"}
         </h2>
@@ -38,7 +73,7 @@ export default async function CommandCenter() {
         )}
       </section>
 
-      <section aria-labelledby="upd" className="mb-8 order-2 md:order-3">
+      <section aria-labelledby="upd" className="mb-8 order-3 md:order-4">
         <h2 id="upd" className="font-serif text-xl mb-3">Replies and interviews</h2>
         {updates.length === 0 ? (
           <Empty title="No replies yet" action="When a recruiter or contact replies, it appears here first." />
@@ -55,9 +90,9 @@ export default async function CommandCenter() {
         )}
       </section>
 
-      <div className="mb-8 order-3 md:order-4"><QuickIngest /></div>
+      <div className="mb-8 order-4 md:order-5 grid md:grid-cols-2 gap-4">{!isDemoMode() && <DiscoverButton />}<QuickIngest /></div>
 
-      <section aria-labelledby="board" className="mb-8 order-4 md:order-2">
+      <section aria-labelledby="board" className="mb-8 order-5 md:order-3">
         <h2 id="board" className="font-serif text-xl mb-3">The board</h2>
         {board.length === 0 ? (
           <Empty title="Your pipeline is empty" action="Add a job above, or connect Gmail alerts in Settings." />

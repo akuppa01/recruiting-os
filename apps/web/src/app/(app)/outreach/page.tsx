@@ -1,8 +1,8 @@
 import { Badge, Empty, PageHeader, type Tone } from "@/components/ui";
 import { getContacts } from "@/lib/data";
 
-const STEP: Record<string, Tone> = { sent: "good", scheduled: "warn", dry_run: "neutral", draft: "neutral", stopped: "bad" };
-const STEP_LABEL: Record<string, string> = { sent: "Sent", scheduled: "Scheduled", dry_run: "Prepared, not sent", draft: "Draft", stopped: "Stopped" };
+const STEP: Record<string, Tone> = { sent: "good", scheduled: "warn", dry_run: "neutral", draft: "neutral", failed: "bad", stopped: "bad" };
+const STEP_LABEL: Record<string, string> = { sent: "Sent", scheduled: "Scheduled", dry_run: "Prepared, not sent", draft: "Draft", failed: "Failed", stopped: "Stopped" };
 
 export default async function Outreach() {
   const cs = await getContacts();

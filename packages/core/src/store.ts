@@ -62,6 +62,7 @@ export interface Store {
   // exceptions
   raiseException(ctx: Ctx, e: Omit<ExceptionRow, "id" | "createdAt" | "resolvedAt">): Promise<ExceptionRow>;
   listExceptions(ctx: Ctx, openOnly?: boolean): Promise<ExceptionRow[]>;
+  resolveException(ctx: Ctx, id: string): Promise<boolean>; // false when not found in this tenant
   // company / contacts / outreach
   upsertCompany(ctx: Ctx, name: string, domain: string | null): Promise<CompanyRow>;
   saveCompanyResearch(ctx: Ctx, companyId: string, research: unknown): Promise<void>;

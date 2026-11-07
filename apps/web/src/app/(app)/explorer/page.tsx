@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge, Empty, PageHeader, Score } from "@/components/ui";
-import { ROLE_LABEL, STAGE_LABEL, getJobs } from "@/lib/data";
+import { ROLE_LABEL, STAGE_LABEL, getJobs, isDemoMode } from "@/lib/data";
+import { TrackingPanel } from "@/components/tracking-panel";
 
 const FACTORS: [keyof NonNullable<Awaited<ReturnType<typeof getJobs>>[number]["breakdown"]>, string][] = [
   ["roleFit", "Role fit"], ["comp", "Compensation"], ["conversion", "Full-time conversion"], ["responsibility", "Responsibility"],
@@ -12,7 +13,7 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
   const all = await getJobs();
   const q = (sp.q ?? "").toLowerCase();
   const min = Number(sp.min ?? 0) || 0;
-  const rows = all.filter((j) => (!q || `${j.company} ${j.title} ${j.location}`.toLowerCase().includes(q)) && (j.score ?? 0) >= min);
+  const rows = all.filter((j) => (!q || `${j.company} ${j.title} ${j.location}`.toLowerCase().includes(q)) && (j.score ?? 0) >= min).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   const sel = all.find((j) => j.id === sp.job) ?? null;
 
   return (
@@ -35,7 +36,7 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
                 <Link href={`/explorer?job=${j.id}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ""}`} className={`flex items-center gap-4 p-4 hover:bg-chalk ${sel?.id === j.id ? "bg-chalk" : ""}`}>
                   <span className="w-14 shrink-0 text-center"><Score value={j.score} /></span>
                   <span className="min-w-0 flex-1"><span className="block font-medium truncate">{j.title}</span><span className="block text-sm text-soft truncate">{j.company} · {j.location}</span></span>
-                  <Badge tone={j.stage === "archived" ? "neutral" : "good"}>{STAGE_LABEL[j.stage]}</Badge>
+                  <Badge tone={j.tracking?.status ? "good" : j.stage === "archived" ? "neutral" : "neutral"}>{j.tracking?.status ? j.tracking.status[0]!.toUpperCase() + j.tracking.status.slice(1) : STAGE_LABEL[j.stage]}</Badge>
                 </Link>
               </li>
             ))}
@@ -58,6 +59,9 @@ export default async function Explorer({ searchParams }: { searchParams: Promise
                   ))}
                 </dl>
               ) : <p className="text-sm text-soft mt-4">No score breakdown yet.</p>}
+              {!isDemoMode() && (
+                <TrackingPanel key={sel.id} jobId={sel.id} applyUrl={sel.applyUrl ?? null} status={sel.tracking?.status ?? null} notes={sel.tracking?.notes ?? ""} followUpAt={sel.tracking?.followUpAt ?? null} />
+              )}
             </>
           )}
         </aside>

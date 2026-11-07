@@ -1,7 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
 
-interface Msg { role: "you" | "chief" | "system"; text: string }
+interface Item { label: string; detail?: string; href?: string }
+interface Msg { role: "you" | "chief" | "system"; text: string; items?: Item[] }
 
 export function Chat() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -16,10 +17,10 @@ export function Chat() {
     setMsgs((m) => [...m, { role: "you", text }]);
     setV(""); setBusy(true);
     try {
-      const r = await fetch("/api/chief-of-staff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text }) });
+      const r = await fetch("/api/chief-of-staff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: text }) });
       if (!r.ok) throw new Error(r.status === 401 ? "You're not signed in. Your message wasn't processed." : r.status === 404 ? "The Chief of Staff service isn't deployed yet. Your message wasn't processed." : `The service returned an error (${r.status}).`);
-      const j = (await r.json()) as { reply?: string };
-      setMsgs((m) => [...m, { role: "chief", text: j.reply ?? "The service returned an empty reply." }]);
+      const j = (await r.json()) as { answer?: string; items?: Item[] };
+      setMsgs((m) => [...m, { role: "chief", text: j.answer ?? "The service returned an empty reply.", items: j.items }]);
     } catch (err) {
       setMsgs((m) => [...m, { role: "system", text: err instanceof Error ? err.message : "Couldn't reach the service." }]);
     } finally {
@@ -34,7 +35,19 @@ export function Chat() {
         {msgs.length === 0 && <p className="text-soft text-sm">Ask what changed today, which roles to prioritize, or what is stuck. Answers come from your database.</p>}
         {msgs.map((m, i) => (
           <div key={i} className={m.role === "you" ? "text-right" : ""}>
-            <p className={`inline-block max-w-[85%] text-left text-sm px-3 py-2 rounded-board ${m.role === "you" ? "bg-ink text-chalk" : m.role === "system" ? "border border-rust text-rust" : "border border-mist"}`}>{m.text}</p>
+            <div className={`inline-block max-w-[85%] text-left text-sm px-3 py-2 rounded-board ${m.role === "you" ? "bg-ink text-chalk" : m.role === "system" ? "border border-rust text-rust" : "border border-mist"}`}>
+              <p>{m.text}</p>
+              {m.items && m.items.length > 0 && (
+                <ul className="mt-2 space-y-1.5">
+                  {m.items.map((it, k) => (
+                    <li key={k}>
+                      {it.href ? <a href={it.href} className="font-medium underline">{it.label}</a> : <span className="font-medium">{it.label}</span>}
+                      {it.detail && <span className="block text-soft">{it.detail}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         ))}
         <div ref={end} />

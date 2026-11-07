@@ -1,11 +1,13 @@
 // DEMO DATA ONLY. Fictional companies and people. Never shown unless the app is in demo mode.
 import type { JobStage, ExceptionType, RoleCategory } from "@ros/core";
+import type { Tracking } from "./tracking";
 
 export interface JobView {
   id: string; title: string; company: string; location: string; stage: JobStage; roleCategory: RoleCategory;
   score: number | null; deadline: string | null; salary: string | null; atsKind: string;
   breakdown: { roleFit: number; comp: number; conversion: number; responsibility: number; flexibility: number; upside: number; entrepreneurialCompat: number } | null;
   rationale: string | null; updatedAt: string;
+  applyUrl?: string | null; tracking?: Tracking | null;
 }
 export interface CompanyView {
   id: string; name: string; domain: string | null; researchedAt: string | null;
@@ -17,7 +19,7 @@ export interface ApplicationView {
 }
 export interface ContactView {
   id: string; name: string; title: string; company: string; relevance: number; suppressed: boolean; suppressReason: string | null;
-  sequence: { step: number; status: "draft" | "scheduled" | "sent" | "dry_run" | "stopped"; when: string | null }[];
+  sequence: { step: number; status: "draft" | "scheduled" | "sent" | "dry_run" | "failed" | "stopped"; when: string | null }[];
 }
 export interface ExceptionView { id: string; type: ExceptionType; detail: string; entity: string; createdAt: string; resolved: boolean }
 export interface ProofView { id: string; company: string; title: string; status: "draft" | "preview_ready"; previewUrl: string | null; loomScript: boolean }

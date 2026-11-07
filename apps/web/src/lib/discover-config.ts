@@ -1,0 +1,40 @@
+// Public job-board feeds checked live on 2026-11-06 (HTTP 200). Startups and mid-size companies first.
+import type { AtsFeed } from "@ros/workers";
+
+export interface Board { ats: AtsFeed; board: string; name: string }
+
+export const BOARDS: Board[] = [
+  { ats: "ashby", board: "cursor", name: "Cursor" },
+  { ats: "ashby", board: "harvey", name: "Harvey" },
+  { ats: "ashby", board: "notion", name: "Notion" },
+  { ats: "ashby", board: "ramp", name: "Ramp" },
+  { ats: "ashby", board: "supabase", name: "Supabase" },
+  { ats: "ashby", board: "vanta", name: "Vanta" },
+  { ats: "ashby", board: "linear", name: "Linear" },
+  { ats: "ashby", board: "posthog", name: "PostHog" },
+  { ats: "ashby", board: "zapier", name: "Zapier" },
+  { ats: "ashby", board: "sentry", name: "Sentry" },
+  { ats: "ashby", board: "runway", name: "Runway" },
+  { ats: "ashby", board: "watershed", name: "Watershed" },
+  { ats: "greenhouse", board: "anthropic", name: "Anthropic" },
+  { ats: "greenhouse", board: "airtable", name: "Airtable" },
+  { ats: "greenhouse", board: "braze", name: "Braze" },
+  { ats: "greenhouse", board: "brex", name: "Brex" },
+  { ats: "greenhouse", board: "calendly", name: "Calendly" },
+  { ats: "greenhouse", board: "carta", name: "Carta" },
+  { ats: "greenhouse", board: "coinbase", name: "Coinbase" },
+  { ats: "greenhouse", board: "discord", name: "Discord" },
+  { ats: "greenhouse", board: "figma", name: "Figma" },
+  { ats: "greenhouse", board: "fivetran", name: "Fivetran" },
+  { ats: "greenhouse", board: "gusto", name: "Gusto" },
+  { ats: "greenhouse", board: "intercom", name: "Intercom" },
+  { ats: "greenhouse", board: "lattice", name: "Lattice" },
+  { ats: "greenhouse", board: "mercury", name: "Mercury" },
+  { ats: "greenhouse", board: "mixpanel", name: "Mixpanel" },
+  { ats: "greenhouse", board: "pagerduty", name: "PagerDuty" },
+  { ats: "greenhouse", board: "scaleai", name: "Scale AI" },
+  { ats: "greenhouse", board: "vercel", name: "Vercel" },
+  { ats: "greenhouse", board: "verkada", name: "Verkada" },
+  { ats: "greenhouse", board: "zocdoc", name: "Zocdoc" },
+  { ats: "lever", board: "outreach", name: "Outreach" },
+];

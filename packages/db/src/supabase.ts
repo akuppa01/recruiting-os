@@ -247,6 +247,16 @@ export class SupabaseStore implements Store {
     return (data ?? []).map(toException);
   }
 
+  async resolveException(ctx: Ctx, id: string) {
+    const { data, error } = await this.sb.from("exceptions").update({ resolved_at: new Date().toISOString() })
+      .match(scope(ctx)).eq("id", id).is("resolved_at", null).select("id");
+    if (error) fail("resolveException", error);
+    if (data?.length) return true;
+    const ex = await this.sb.from("exceptions").select("id").match(scope(ctx)).eq("id", id).maybeSingle();
+    if (ex.error) fail("resolveException.find", ex.error);
+    return !!ex.data; // already resolved counts as success; unknown id in this tenant is false
+  }
+
   // ------------------------------------------------------------ companies / contacts / outreach
   async upsertCompany(ctx: Ctx, name: string, domain: string | null) {
     const find = async () => {

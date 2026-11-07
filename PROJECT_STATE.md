@@ -98,3 +98,14 @@ Code: `packages/workers/src/{normalize,score,stages,connectors,resume,apply}`, `
 - Stale `processing` claim reaper not implemented. Apply adapter (Agent B) not yet wired into `createDefaultStages` (pass `apply`).
 - Bug found in B's `extractFromText`: labelled-line regex `^company|employer|organization\s*[:-]…` has unanchored alternation, so "Company: X" lines are not parsed (company → "unknown company"). Fix: wrap alternation `(?:${k})`.
 - Edited outside my paths (necessary, minimal): added `tests` to `pnpm-workspace.yaml`; appended export lines to `packages/workers/src/index.ts`.
+
+## V2 P0 audit (2026-11-06, lead) — evidence from reading code, not from running it
+**Verified present in code (tested earlier in cycle 1 against in-memory/pglite only):** Store contract + SupabaseStore (tenant+user filter on every query), RLS migrations (pglite-proven), normalize/score/resume/apply/research/outreach/contacts workers, 10-tool MCP server, 7 n8n workflow JSONs, Google OAuth + cookie session on the live Vercel deploy (user-verified 2026-11-06).
+**Broken / stubbed (found):**
+1. `apps/web/src/lib/data.ts` returned `[]` for every authenticated read (only demo mode had rows). FIXED in code: reads now go through the cookie-session tenant via SupabaseStore / tenant-filtered queries. NOT yet verified against live Supabase.
+2. `pipeline-boot.ts` ran the pipeline fire-and-forget; on Vercel serverless that work is frozen after the 202, so ingested jobs would stay `accepted`. FIXED in code: `after()` + `/api/internal/process` cron sweep (needs `CRON_SECRET` env). NOT yet verified live.
+3. No `proof_assets` table, no notifications table (replies derived from `events`), no usage dashboard, `getProofs()` returns [] outside demo mode.
+4. `llm.ts` has no router, budgets, caching, or usage logging; default model id hardcoded.
+5. Chief of Staff handler, `/api/internal/*` n8n routes, exception resolve route: unverified/absent (see handlers.ts).
+6. Evidence bank empty (B-003) so no real tailored resume can be produced. n8n never executed. Gmail OAuth not set up (B-004).
+**Estimated effort:** P1 verification + CoS + internal routes ~1 cycle; model router/budgets ~0.5; discovery adapters live ~1; UI redesign ~1–2; relationship engine live ~1.
