@@ -462,7 +462,7 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
       const sig = formSignature(raw);
       if (pageNo === 1) {
         if (raw.length === 0) {
-          await deps.afterSubmit?.(page).catch(() => undefined); // diagnostics: the unfilled public job page (no personal data on it)
+          await deps.afterSubmit?.(page, { confirmed: false }).catch(() => undefined); // diagnostics: the unfilled public job page (no personal data on it)
           const wall = (await pageText(page).catch(() => "")).toLowerCase();
           if (/access denied|performing security verification|verify you are human|just a moment|attention required|are you a robot/.test(wall)) {
             // The company's careers site is blocking automated visitors. Never evaded: reported so the user can apply by hand (or from their own computer).
