@@ -18,6 +18,8 @@ export interface ApplyDeps {
   /** adapters proven in supervised real-world runs; default empty => live submit is never attempted */
   verifiedAdapters?: Set<AtsKind>;
   openPage?: (url: string) => Promise<OpenedPage>;
+  /** Last gate before a live submit click. Return false to leave the form filled but unsubmitted. */
+  beforeSubmit?: (info: { company: string; title: string; url: string; filled: string[] }) => Promise<boolean>;
 }
 
 export type ApplyOutcome = "already_applied" | "dry_run" | "submitted_confirmed" | "submitted_unverified" | "blocked" | "unsupported" | "live_gated";
@@ -25,7 +27,7 @@ export interface ApplyReport { outcome: ApplyOutcome; result: ApplicationAttempt
 
 export async function defaultOpenPage(url: string): Promise<OpenedPage> {
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: process.env.ROS_HEADED !== "1" });
   const page = await (await browser.newContext()).newPage();
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
   return { page, close: () => browser.close() };
@@ -124,6 +126,11 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
     }
 
     // LIVE (policy.mode==='live' && autoApply && adapter verified)
+    if (deps.beforeSubmit && !(await deps.beforeSubmit({ company: job.normalized.company, title: job.normalized.title, url: page.url(), filled }))) {
+      await store.updateApplication(ctx, app.id, { status: "dry_run", lastError: "declined_before_submit" });
+      await store.logEvent(ctx, "application.declined_before_submit", "application", app.id, { jobId });
+      return { outcome: "live_gated", result: mk("dry_run"), filled, applicationId: app.id };
+    }
     let clicked = false;
     for (const sel of adapter.submitSelectors) {
       const b = page.locator(sel).first();

@@ -53,10 +53,12 @@ export async function setTracking(
 
   if (becameApplied) {
     const { app } = await store.getOrCreateApplication(ctx, jobId);
-    await store.updateApplication(ctx, app.id, {
-      status: "succeeded", confirmed: true, submittedAt: next.appliedAt,
-      evidence: { kind: "user_attested", detail: "Marked as applied by you" },
-    });
+    if (!app.confirmed) { // never overwrite real confirmation evidence recorded by the apply worker
+      await store.updateApplication(ctx, app.id, {
+        status: "succeeded", confirmed: true, submittedAt: next.appliedAt,
+        evidence: { kind: "user_attested", detail: "Marked as applied by you" },
+      });
+    }
   }
   if (next.status !== cur.status)
     await store.logEvent(ctx, "job.tracking_status", "job", jobId, { from: cur.status, to: next.status });
