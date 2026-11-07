@@ -4,6 +4,8 @@ import type { CandidateProfile } from "../resume/evidence.js";
 import { ADAPTERS, detectConfirmation, type AtsAdapter } from "./adapters.js";
 import { detectBlockers, pageText, scanForm } from "./browser.js";
 import { splitName, type FieldKey } from "./fields.js";
+import { wantedAnswer, type Wanted } from "./answers.js";
+import type { ScannedField } from "./browser.js";
 
 export * from "./adapters.js";
 export * from "./fields.js";
@@ -18,6 +20,8 @@ export interface ApplyDeps {
   /** adapters proven in supervised real-world runs; default empty => live submit is never attempted */
   verifiedAdapters?: Set<AtsKind>;
   openPage?: (url: string) => Promise<OpenedPage>;
+  /** Called once the form has been filled (before any submit decision), e.g. to save a screenshot. */
+  afterFill?: (page: Page, info: { filled: string[] }) => Promise<void>;
   /** Last gate before a live submit click. Return false to leave the form filled but unsubmitted. */
   beforeSubmit?: (info: { company: string; title: string; url: string; filled: string[] }) => Promise<boolean>;
 }
@@ -30,7 +34,43 @@ export async function defaultOpenPage(url: string): Promise<OpenedPage> {
   const browser = await chromium.launch({ headless: process.env.ROS_HEADED !== "1" });
   const page = await (await browser.newContext()).newPage();
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+  await page.waitForTimeout(1500); // let client-side rendering settle before the form is scanned
   return { page, close: () => browser.close() };
+}
+
+
+/** Fill a yes/no style question from a saved answer. Returns false when no control could be matched. */
+async function answerField(page: Page, f: ScannedField, want: Wanted, all: ScannedField[]): Promise<boolean> {
+  const loc = page.locator(f.selector);
+  if (f.tag === "select") {
+    const label = f.options.find((o) => want.pick.test(o));
+    if (!label) return false;
+    await loc.selectOption({ label }); return true;
+  }
+  if (f.type === "radio") {
+    const mate = all.find((o) => o.type === "radio" && o.name === f.name && want.pick.test(o.label));
+    if (!mate) return false;
+    await page.locator(mate.selector).check({ force: true }); return true;
+  }
+  if (f.type === "checkbox") return false;
+  if (f.combo) {
+    // Open the dropdown and click the option whose text matches (typing could match "Female" for "Male").
+    try {
+      await loc.click({ timeout: 5000 });
+      const opts = page.locator('[role="option"]');
+      await opts.first().waitFor({ state: "visible", timeout: 4000 });
+      const n = await opts.count();
+      for (let i = 0; i < n; i++) {
+        const t = (await opts.nth(i).innerText()).trim();
+        if (want.pick.test(t)) { await opts.nth(i).click(); return true; }
+      }
+      await page.keyboard.press("Escape");
+      return false;
+    } catch { /* not a role=option dropdown: fall back to typing */ }
+    await loc.fill(want.text); await page.waitForTimeout(400); await page.keyboard.press("Enter"); return true;
+  }
+  await loc.fill(want.text); return true;
 }
 
 const valueFor = (key: FieldKey, p: CandidateProfile, cover?: string): string | null => {
@@ -92,16 +132,41 @@ export async function applyToJob(store: Store, ctx: Ctx, jobId: string, deps: Ap
 
     const fields = await scanForm(page);
     const filled: string[] = [], sensitive: string[] = [], missing: string[] = [];
+    const answered = new Set<string>();
     for (const f of fields) {
-      if (f.cls.kind === "sensitive") { if (f.required) sensitive.push(`${f.cls.topic}: "${f.label}"`); continue; }
+      if (f.cls.kind === "sensitive") {
+        const key = `${f.type === "radio" ? "g:" + f.name : f.selector}`;
+        if (answered.has(key)) continue;
+        const want = wantedAnswer(f.cls.topic, f.group || f.label, deps.profile.eligibility);
+        if (want && (await answerField(page, f, want, fields).catch(() => false))) { answered.add(key); filled.push(`answered: ${f.cls.topic}`); continue; }
+        if (f.required) sensitive.push(`${f.cls.topic}: "${f.group || f.label}"`);
+        continue;
+      }
       if (f.cls.kind === "unknown") { if (f.required) missing.push(f.label || f.name); continue; }
       const loc = page.locator(f.selector);
-      if (f.cls.key === "resume") { await loc.setInputFiles(deps.resumePdfPath); filled.push("resume"); continue; }
-      if (f.cls.key === "cover_letter_file") continue;
-      const v = valueFor(f.cls.key, deps.profile, deps.coverLetter);
-      if (v == null || v === "") { if (f.required) missing.push(`${f.cls.key} (no value in profile)`); continue; }
-      await loc.fill(v); filled.push(f.cls.key);
+      try {
+        if (f.cls.key === "resume") { await loc.setInputFiles(deps.resumePdfPath, { timeout: 10000 }); filled.push("resume"); continue; }
+        if (f.cls.key === "cover_letter_file") continue;
+        const v = valueFor(f.cls.key, deps.profile, deps.coverLetter);
+        if (v == null || v === "") { if (f.required) missing.push(`${f.cls.key} (no value in profile)`); continue; }
+        await loc.fill(v, { timeout: 8000 }); filled.push(f.cls.key);
+      } catch {
+        if (f.required) missing.push(`${f.cls.key} (could not fill "${f.label}")`);
+      }
     }
+    // Some questions only appear after another is answered (e.g. race after Hispanic/Latino): scan once more for those.
+    if (answered.size) {
+      const again = await scanForm(page);
+      for (const f of again) {
+        if (f.cls.kind !== "sensitive") continue;
+        const key = f.type === "radio" ? `g:${f.name}` : f.selector;
+        if (answered.has(key)) continue;
+        const want = wantedAnswer(f.cls.topic, f.group || f.label, deps.profile.eligibility);
+        if (want && (await answerField(page, f, want, again).catch(() => false))) { answered.add(key); filled.push(`answered: ${f.cls.topic}`); }
+        else if (f.required && !sensitive.some((x) => x.includes(f.group || f.label))) sensitive.push(`${f.cls.topic}: "${f.group || f.label}"`);
+      }
+    }
+    await deps.afterFill?.(page, { filled }).catch(() => undefined);
     if (sensitive.length) {
       await raise("sensitive_eligibility_question", `Required eligibility/EEO question(s) need your own answer: ${sensitive.join("; ")}`);
     }

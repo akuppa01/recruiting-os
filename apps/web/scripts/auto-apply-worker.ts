@@ -7,18 +7,19 @@
 // no unconfirmed (highlighted) text in the resume used, and your "y" at the terminal for each application.
 // Applied is recorded only when the confirmation page text is seen. CAPTCHAs, sign-in walls and eligibility questions are never bypassed.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { AutomationPolicy, type AtsKind } from "@ros/core";
 import { SupabaseStore, createServiceClient } from "@ros/db";
-import { applyToJob } from "@ros/workers";
+import { applyToJob } from "../../../packages/workers/src/apply/index.ts";
 import { setTracking } from "../src/lib/tracking";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const RESUMES = join(ROOT, "resumes/evidence/private/resume_system/01_Child_Resumes");
-const MASTER = join(ROOT, "resumes/evidence/private/resume_system/00_Master/Master_Resume.docx");
+const SHOTS = join(ROOT, "resumes/evidence/private/shots");
+const MASTER = join(ROOT, "resumes/evidence/private/resume_system/01_Child_Resumes/PM_Resume.docx");
 
 // ---- args / env (secrets are read into process.env and never printed)
 const argv = process.argv.slice(2);
@@ -36,7 +37,7 @@ for (const line of readFileSync(join(ROOT, ".env.local"), "utf8").split("\n")) {
 
 // ---- resume helpers
 const docxXml = (f: string) => execFileSync("unzip", ["-p", f, "word/document.xml"], { maxBuffer: 20_000_000 }).toString("utf8");
-const text = (xml: string) => [...xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/gs)].map((m) => m[1]).join("");
+const text = (xml: string) => [...xml.matchAll(/<w:t(?:\s[^>]*)?>(.*?)<\/w:t>/gs)].map((m) => m[1]).join("");
 
 function unconfirmedText(docx: string): string[] {
   const out: string[] = [];
@@ -53,7 +54,7 @@ function readProfile() {
   const email = contact.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? "";
   const phone = contact.match(/\+?\d[\d .()-]{8,}\d/)?.[0]?.trim();
   const location = contact.replace(email, "").replace(phone ?? "", "").trim() || undefined;
-  if (!name || !email) throw new Error("Could not read name/email from Master_Resume.docx header");
+  if (!name || !email) throw new Error("Could not read name/email from the PM_Resume.docx header");
   return { name, email, phone, location, education: [] as string[] };
 }
 
@@ -104,8 +105,12 @@ async function main() {
       } else if (unconfirmed.length) console.log(`  warning: ${resume.base} resume still has unconfirmed text (${unconfirmed.length} item(s)); live submit will be refused until fixed.`);
 
       console.log(`→ ${label} [${j.normalized.atsKind}] using ${resume.base} resume`);
+      const { data: prof } = await store.sb.from("profiles").select("application_profile").eq("tenant_id", ctx.tenantId).eq("user_id", ctx.userId).maybeSingle();
+      const eligibility = (prof?.application_profile as { eligibility?: Record<string, unknown> } | null)?.eligibility;
+      mkdirSync(SHOTS, { recursive: true });
       const rep = await applyToJob(store, ctx, j.id, {
-        profile, resumePdfPath: resume.pdf, verifiedAdapters: SUBMIT ? VERIFIED : new Set(),
+        profile: { ...profile, eligibility: eligibility as never }, resumePdfPath: resume.pdf,
+        afterFill: async (page) => { await page.screenshot({ path: join(SHOTS, `${j.id}.png`), fullPage: true }); }, verifiedAdapters: SUBMIT ? VERIFIED : new Set(),
         beforeSubmit: async (info) => {
           if (!confirmEach) return true;
           const a = (await rl.question(`  Submit to ${info.company} — ${info.title}? [y]es / [N]o / [a]ll remaining: `)).trim().toLowerCase();
