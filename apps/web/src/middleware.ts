@@ -7,6 +7,8 @@ const PUBLIC_PATHS = [
   "/auth/logout",
   "/_next",
   "/favicon.ico",
+  "/manifest.webmanifest", // static PWA files: browsers fetch these without cookies
+  "/sw.js",
   "/api/health",
 ];
 
